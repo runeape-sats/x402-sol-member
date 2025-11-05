@@ -1,0 +1,20 @@
+:root {
+  --primary: #14f195;
+  --primary-dark: #00c97a;
+  --bg: #0a0b0d;
+  --bg-light: #1a1b1f;
+  --text: #ffffff;
+  --text-dim: #8d8d8d;
+  --border: #2a2b2f;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
