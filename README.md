@@ -1,6 +1,10 @@
 # x402-sol-member
 
-A minimal x402 facilitator for detecting membership based on SPL token balance. This project enables pay-per-call API access with Solana-based payments, including membership discounts for token holders.
+This is a minimal dependency x402 serverless facilitator (in Firebase Functions) for free member-only access based on SPL token balance and a React client sample for pay-per-call API access with Solana-based USDC payments.
+
+## Why?
+1. You can host your x402 facilitator using serverless Firebase Functions. Your facilitator do not even need to hold any pkeys.
+2. You can customize x402 SOL payment requirements including SPL-based membership access.
 
 ## Features
 
@@ -14,14 +18,13 @@ A minimal x402 facilitator for detecting membership based on SPL token balance. 
 
 - **Backend (`functions/`)**: Firebase Cloud Functions handle x402 payment verification, transaction validation, and membership checks.
 - **Frontend (`host/`)**: React app built with Vite for user interaction with Phantom wallet.
-- **Deployment**: Hosted on Firebase (functions and static hosting).
+- **Deployment**: It's up to you but it's easy to host on Firebase (functions and static hosting).
 
 ## Prerequisites
 
 - Node.js (v18 or later)
 - Firebase CLI
 - Phantom wallet (for testing frontend)
-- Solana CLI (optional, for advanced testing)
 
 ## Installation
 
@@ -34,14 +37,14 @@ A minimal x402 facilitator for detecting membership based on SPL token balance. 
 2. Install dependencies for backend:
    ```bash
    cd functions
-   npm install
+   npm i
    cd ..
    ```
 
 3. Install dependencies for frontend:
    ```bash
    cd host
-   npm install
+   npm i
    cd ..
    ```
 
@@ -77,16 +80,16 @@ VITE_FIREBASE_FUNCTIONS_URL=https://your-project.firebaseapp.com
 
 ### Constants
 - **USDC Mint**: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` (mainnet)
-- **Price**: 10,000 (0.01 USDC per call)
+- **Price**: 10,000 ($0.01 USDC per call)
 - **Membership Token**: Configure your SPL token mint for membership checks.
 
 ## Usage
 
 ### Development
 
-1. Start Firebase emulators:
+1. Start Firebase Functions emulators:
    ```bash
-   firebase emulators:start
+   firebase emulators:start --only functions
    ```
 
 2. Run frontend in development mode:
@@ -106,28 +109,6 @@ VITE_FIREBASE_FUNCTIONS_URL=https://your-project.firebaseapp.com
 ### API Endpoints
 
 - **GET /weather**: Requires x402 payment header. Returns weather data if payment is valid.
-
-## Deployment
-
-1. Build frontend:
-   ```bash
-   cd host
-   npm run build
-   ```
-
-2. Deploy to Firebase:
-   ```bash
-   firebase deploy
-   ```
-
-3. Access at your Firebase hosting URL.
-
-## Contributing
-
-1. Fork the repository.
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Make changes and test locally.
-4. Submit a pull request.
 
 ## License
 
