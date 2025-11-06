@@ -1,4 +1,3 @@
-
 const cors = require("cors")({ origin: true });
 
 const functions = require("firebase-functions/v1");
@@ -59,13 +58,15 @@ const checkMembership = async (connection, feePayer) => {
   const memberSpl = functions.config().solana.memberspl;
   const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
     feePayer,
-    { programId: TOKEN_PROGRAM_ID }
+    { programId: TOKEN_PROGRAM_ID },
   );
   const tokenAccount = tokenAccounts.value.find(
-    (account) => account.account.data.parsed.info.mint === memberSpl
+    (account) => account.account.data.parsed.info.mint === memberSpl,
   );
   if (!tokenAccount) return false;
-  const balance = Number(tokenAccount.account.data.parsed.info.tokenAmount.uiAmount);
+  const balance = Number(
+    tokenAccount.account.data.parsed.info.tokenAmount.uiAmount,
+  );
   const memberSplReq = Number(functions.config().solana.membersplreq);
   return balance > memberSplReq;
 };
@@ -83,25 +84,30 @@ const verifyTransaction = (tx, req) => {
   const MERCHANT_TOKEN_ACCOUNT = new PublicKey(req.payTo);
 
   const transferIx = tx.instructions.find(
-    (ix) => ix.programId.toString() === TOKEN_PROGRAM_ID.toString()
+    (ix) => ix.programId.toString() === TOKEN_PROGRAM_ID.toString(),
   );
   if (!transferIx) throw new Error("No Token transferChecked in tx");
 
   const parsed = decodeTransferCheckedInstruction(transferIx);
   if (!parsed) throw new Error("Instruction is not transferChecked");
 
-  const { data: { amount, decimals }, keys } = parsed;
+  const {
+    data: { amount, decimals },
+    keys,
+  } = parsed;
   const destinationPubkey = keys.destination.pubkey;
   const mintPubkey = keys.mint.pubkey;
 
   if (decimals !== 6) throw new Error("Token decimals must be 6");
-  if (Number(amount) !== PRICE) throw new Error(`Incorrect amount – expected ${PRICE}, got ${amount}`);
-  if (!destinationPubkey.equals(MERCHANT_TOKEN_ACCOUNT)) throw new Error("Funds not going to the merchant account");
+  if (Number(amount) !== PRICE)
+    throw new Error(`Incorrect amount – expected ${PRICE}, got ${amount}`);
+  if (!destinationPubkey.equals(MERCHANT_TOKEN_ACCOUNT))
+    throw new Error("Funds not going to the merchant account");
   if (!mintPubkey.equals(USDC_MINT)) throw new Error("Wrong token mint");
 
   const feePayer = tx.feePayer;
   const feePayerSig = tx.signatures.find(
-    (sig) => feePayer && sig.publicKey.equals(feePayer)
+    (sig) => feePayer && sig.publicKey.equals(feePayer),
   );
   if (!feePayerSig || !feePayerSig.signature) {
     throw new Error("Buyer (fee payer) signature missing");
@@ -153,7 +159,9 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
     console.log(`member balance greater than req, skipping feePayer check`);
     return feePayer;
   } else {
-    console.log(`non-member balance less than req, proceeding with feePayer check`);
+    console.log(
+      `non-member balance less than req, proceeding with feePayer check`,
+    );
   }
 
   verifyTransaction(tx, req);
