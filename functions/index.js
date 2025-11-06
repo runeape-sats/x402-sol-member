@@ -16,58 +16,35 @@ const {
 /*───────────────────────────────────────────────────────────────────────────*/
 
 /**
- * Decodes the base64-encoded x-payment header into a JSON object.
- * @param {string} headerValue - The base64-encoded header value.
- * @returns {object} The decoded JSON object.
- * @throws {Error} If decoding or parsing fails.
- */
-const decodePaymentHeader = (headerValue) => {
-  try {
-    return JSON.parse(Buffer.from(headerValue, "base64").toString("utf8"));
-  } catch (err) {
-    throw new Error("Failed to decode x-payment header");
-  }
-};
-
-/**
- * Validates the decoded payment header against the payment requirements.
- * @param {object} decoded - The decoded header object.
- * @param {object} paymentRequirements - The expected payment requirements.
- * @returns {object} The first accepted scheme requirement.
- * @throws {Error} If version, scheme, or network doesn't match.
- */
-const validatePaymentRequirements = (decoded, paymentRequirements) => {
-  const req = paymentRequirements.accepts[0];
-  if (
-    decoded.x402Version !== paymentRequirements.x402Version ||
-    decoded.scheme !== req.scheme ||
-    decoded.network !== req.network
-  ) {
-    throw new Error("Unsupported x402 version / scheme / network");
-  }
-  return req;
-};
-
-/**
  * Checks if the fee payer is a member based on SPL token balance.
  * @param {Connection} connection - Solana connection instance.
  * @param {PublicKey} feePayer - The public key of the fee payer.
  * @returns {boolean} True if the balance exceeds the required amount.
  */
 const checkMembership = async (connection, feePayer) => {
+  // Retrieve the member SPL token mint address from Firebase config
   const memberSpl = functions.config().solana.memberspl;
+
+  // Get the required balance from config
+  const memberSplReq = Number(functions.config().solana.membersplreq);
+
+  // Get all token accounts owned by the fee payer
   const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
     feePayer,
     { programId: TOKEN_PROGRAM_ID },
   );
+  // Find the token account for the member SPL token
   const tokenAccount = tokenAccounts.value.find(
     (account) => account.account.data.parsed.info.mint === memberSpl,
   );
+  // If no token account found, not a member
   if (!tokenAccount) return false;
+  // Get the token balance
   const balance = Number(
     tokenAccount.account.data.parsed.info.tokenAmount.uiAmount,
   );
-  const memberSplReq = Number(functions.config().solana.membersplreq);
+
+  // Check if balance exceeds requirement
   return balance > memberSplReq;
 };
 
@@ -79,18 +56,22 @@ const checkMembership = async (connection, feePayer) => {
  * @throws {Error} If transaction details don't match requirements.
  */
 const verifyTransaction = (tx, req) => {
+  // Extract payment details from requirements
   const PRICE = Number(req.maxAmountRequired);
   const USDC_MINT = new PublicKey(req.asset);
   const MERCHANT_TOKEN_ACCOUNT = new PublicKey(req.payTo);
 
+  // Find the token transfer instruction in the transaction
   const transferIx = tx.instructions.find(
     (ix) => ix.programId.toString() === TOKEN_PROGRAM_ID.toString(),
   );
   if (!transferIx) throw new Error("No Token transferChecked in tx");
 
+  // Parse the transfer instruction
   const parsed = decodeTransferCheckedInstruction(transferIx);
   if (!parsed) throw new Error("Instruction is not transferChecked");
 
+  // Extract transfer details
   const {
     data: { amount, decimals },
     keys,
@@ -98,13 +79,18 @@ const verifyTransaction = (tx, req) => {
   const destinationPubkey = keys.destination.pubkey;
   const mintPubkey = keys.mint.pubkey;
 
+  // Validate token decimals (USDC has 6)
   if (decimals !== 6) throw new Error("Token decimals must be 6");
+  // Validate transfer amount
   if (Number(amount) !== PRICE)
     throw new Error(`Incorrect amount – expected ${PRICE}, got ${amount}`);
+  // Validate destination account
   if (!destinationPubkey.equals(MERCHANT_TOKEN_ACCOUNT))
     throw new Error("Funds not going to the merchant account");
+  // Validate token mint
   if (!mintPubkey.equals(USDC_MINT)) throw new Error("Wrong token mint");
 
+  // Get fee payer and check signature
   const feePayer = tx.feePayer;
   const feePayerSig = tx.signatures.find(
     (sig) => feePayer && sig.publicKey.equals(feePayer),
@@ -117,18 +103,6 @@ const verifyTransaction = (tx, req) => {
 };
 
 /**
- * Broadcasts the signed transaction to the Solana network.
- * @param {Connection} connection - Solana connection instance.
- * @param {Transaction} tx - The signed transaction.
- * @returns {string} The transaction signature.
- */
-const broadcastTransaction = async (connection, tx) => {
-  return await connection.sendRawTransaction(tx.serialize(), {
-    skipPreflight: true,
-  });
-};
-
-/**
  * Main function to verify and settle an x402 payment.
  * @param {string} headerValue - The x-payment header value.
  * @param {object} paymentRequirements - The payment requirements object.
@@ -138,39 +112,76 @@ const broadcastTransaction = async (connection, tx) => {
 async function verifyAndSettle(headerValue, paymentRequirements) {
   console.log("[DEBUG] Starting verifyAndSettle");
 
-  const decoded = decodePaymentHeader(headerValue);
-  const req = validatePaymentRequirements(decoded, paymentRequirements);
+  // Decode the base64-encoded payment header
+  let decoded;
+  try {
+    decoded = JSON.parse(Buffer.from(headerValue, "base64").toString("utf8"));
+  } catch (err) {
+    return { success: false, error: "Failed to decode x-payment header" };
+  }
 
+  // Validate payment requirements match the decoded header
+  const innerReq = paymentRequirements.accepts[0];
+  if (
+    decoded.x402Version !== paymentRequirements.x402Version ||
+    decoded.scheme !== innerReq.scheme ||
+    decoded.network !== innerReq.network
+  ) {
+    return {
+      success: false,
+      error: "Unsupported x402 version / scheme / network",
+    };
+  }
+  const req = innerReq;
+
+  // Extract transaction and reference from payload
   const { txBase64, reference } = decoded.payload ?? {};
-  if (!txBase64) throw new Error("Missing txBase64 in payload");
-  if (!reference) throw new Error("Missing reference in payload");
+  if (!txBase64)
+    return { success: false, error: "Missing txBase64 in payload" };
+  if (!reference)
+    return { success: false, error: "Missing reference in payload" };
 
+  // Deserialize the transaction
   const txBuffer = Buffer.from(txBase64, "base64");
   const tx = solTransaction.from(txBuffer);
 
+  // Get the fee payer from the transaction
   const feePayer = tx.feePayer;
   console.log("feePayer", feePayer.toBase58());
 
+  // Establish Solana connection
   const rpcUrl = functions.config().solana.rpcurl;
   const connection = new Connection(rpcUrl);
 
+  // Check if fee payer is a member (for discounts)
   const isMember = await checkMembership(connection, feePayer);
   if (isMember) {
     console.log(`member balance greater than req, skipping feePayer check`);
-    return feePayer;
+    return { success: true, value: feePayer };
   } else {
     console.log(
       `non-member balance less than req, proceeding with feePayer check`,
     );
   }
 
-  verifyTransaction(tx, req);
+  // Verify transaction details
+  try {
+    verifyTransaction(tx, req);
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 
+  // Broadcast the transaction to the network
   console.log("[DEBUG] Broadcasting transaction");
-  const sig = await broadcastTransaction(connection, tx);
-  console.log("[DEBUG] Transaction broadcasted:", sig);
-
-  return sig;
+  try {
+    const sig = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: true,
+    });
+    console.log("[DEBUG] Transaction broadcasted:", sig);
+    return { success: true, value: sig };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 }
 
 // x402 weather sample
@@ -181,7 +192,7 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
  */
 exports.weather = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
-    // CORS headers
+    // Set CORS headers
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Headers", "Content-Type, x-payment");
     if (req.method === "OPTIONS") {
@@ -189,22 +200,26 @@ exports.weather = functions.https.onRequest((req, res) => {
       return;
     }
 
+    // Validate request method and path
     if (req.method !== "GET" || (req.path !== "/" && req.path !== "/weather")) {
       res.status(404).json({ error: "Not found" });
       return;
     }
 
+    // Define payment price (0.01 USDC in smallest units)
     const PRICE = 10_000; // 0.01 USDC
+    // USDC mint address on Solana mainnet
     const USDC_MINT = new PublicKey(
       `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, // USDC mainnet mint
     );
 
+    // Merchant's token account from config
     const merchantTokenAcc = functions.config().solana.merchanttokenacc;
     const MERCHANT_TOKEN_ACCOUNT = new PublicKey(
       `${merchantTokenAcc}`, // example merchant token account
     );
 
-    // todo: move to database
+    // Define payment requirements (TODO: move to database)
     const paymentRequirements = {
       x402Version: 1,
       accepts: [
@@ -221,30 +236,35 @@ exports.weather = functions.https.onRequest((req, res) => {
       ],
     };
 
+    // Check for payment header
     const payHeader = req.header("x-payment");
     if (!payHeader) {
       return res.status(402).json(paymentRequirements);
     }
-    try {
-      const txHash = await verifyAndSettle(payHeader, paymentRequirements);
-      console.log("[DEBUG] Payment settled:", txHash);
-      if (txHash) {
-        const receipt = {
-          txHash,
-          settledAt: new Date().toISOString(),
-        };
-        res.set(
-          "X-PAYMENT-RESPONSE",
-          Buffer.from(JSON.stringify(receipt)).toString("base64"),
-        );
-        return res.json({ temperatureF: 72 });
-      }
-      return res.status(500).json({ error: "Settlement failed" });
-    } catch (e) {
+    // Verify and settle the payment
+    const result = await verifyAndSettle(payHeader, paymentRequirements);
+    if (!result.success) {
       return res.status(402).json({
         ...paymentRequirements,
-        error: e && e.message ? e.message : String(e),
+        error: result.error,
       });
     }
+    const txHash = result.value;
+    console.log("[DEBUG] Payment settled:", txHash);
+    if (txHash) {
+      // Create payment receipt
+      const receipt = {
+        txHash,
+        settledAt: new Date().toISOString(),
+      };
+      // Set response header with base64-encoded receipt
+      res.set(
+        "X-PAYMENT-RESPONSE",
+        Buffer.from(JSON.stringify(receipt)).toString("base64"),
+      );
+      // Return weather data
+      return res.json({ temperatureF: 72 });
+    }
+    return res.status(500).json({ error: "Settlement failed" });
   });
 });
