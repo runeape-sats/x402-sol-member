@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { Buffer } from 'buffer'
+import { Buffer } from "buffer";
 
 import {
-  TransactionInstruction,  PublicKey, Transaction, Connection
+  TransactionInstruction,
+  PublicKey,
+  Transaction,
+  Connection,
 } from "@solana/web3.js";
 import { ComputeBudgetProgram } from "@solana/web3.js";
 import {
@@ -24,9 +27,14 @@ const Wallet = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // Configuration from environment variables (Vite uses import.meta.env)
-  const RPC = import.meta.env.VITE_RPC_ENDPOINT || "https://api.mainnet-beta.solana.com";
-  const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-  const MERCHANT_TOKEN_ACCOUNT = import.meta.env.VITE_MERCHANT_TOKEN_ACCOUNT ? new PublicKey(import.meta.env.VITE_MERCHANT_TOKEN_ACCOUNT) : null;
+  const RPC =
+    import.meta.env.VITE_RPC_ENDPOINT || "https://api.mainnet-beta.solana.com";
+  const USDC_MINT = new PublicKey(
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  );
+  const MERCHANT_TOKEN_ACCOUNT = import.meta.env.VITE_MERCHANT_TOKEN_ACCOUNT
+    ? new PublicKey(import.meta.env.VITE_MERCHANT_TOKEN_ACCOUNT)
+    : null;
   const PRICE = 10000; // 0.01 USDC
 
   /**
@@ -116,7 +124,7 @@ const Wallet = () => {
    * @returns {string} Base64-encoded x402 header.
    */
   const buildX402Header = (signed, ref) => {
-    const txBase64 = Buffer.from(signed.serialize()).toString('base64');
+    const txBase64 = Buffer.from(signed.serialize()).toString("base64");
     return Buffer.from(
       JSON.stringify({
         x402Version: 1,
@@ -124,7 +132,7 @@ const Wallet = () => {
         network: `solana-mainnet-beta`,
         payload: { txBase64, reference: ref },
       }),
-    ).toString('base64');
+    ).toString("base64");
   };
 
   /**
@@ -135,7 +143,8 @@ const Wallet = () => {
    */
   const callWeatherAPI = async (xPayment) => {
     const response = await fetch(
-      import.meta.env.VITE_FIREBASE_FUNCTIONS_URL || "http://127.0.0.1:5001/weather",
+      import.meta.env.VITE_FIREBASE_FUNCTIONS_URL ||
+        "http://127.0.0.1:5001/weather",
       {
         method: "GET",
         headers: { "X-PAYMENT": xPayment },
