@@ -1,9 +1,9 @@
 # x402-sol-member
 
-This is a minimal dependency x402 serverless facilitator (in Firebase Functions) for free member-only access based on SPL token balance and a React client sample for pay-per-call API access with Solana-based USDC payments.
+x402 is not hard to self-host. This is a minimal dependency x402 facilitator (using serverless Firebase Functions) for checking member-only access based on SPL token balance or processing a x402 payment. This sample project comes with a minimum React client for pay-per-call API access with Solana-based USDC payments.
 
 ## Why?
-1. You can host your x402 facilitator using serverless Firebase Functions. Your facilitator do not even need to hold any pkeys.
+1. You can host your x402 facilitator using serverless Firebase Functions (pay-for-use plan). Your facilitator does not even need to hold any pkeys.
 2. You can customize x402 SOL payment requirements including SPL-based membership access.
 
 ## Features
@@ -23,8 +23,10 @@ This is a minimal dependency x402 serverless facilitator (in Firebase Functions)
 ## Prerequisites
 
 - Node.js (v18 or later)
-- Firebase CLI
-- Phantom wallet (for testing frontend)
+- Firebase CLI (for setting up a Firebase project)
+- Phantom wallet (for web-client payment)
+- Solana RPC url
+- Solana address for receiving x402 payment
 
 ## Installation
 
@@ -33,82 +35,60 @@ This is a minimal dependency x402 serverless facilitator (in Firebase Functions)
    git clone https://github.com/runeape-sats/x402-sol-member.git
    cd x402-sol-member
    ```
-
-2. Install dependencies for backend:
-   ```bash
-   cd functions
-   npm i
-   cd ..
-   ```
-
-3. Install dependencies for frontend:
-   ```bash
-   cd host
-   npm i
-   cd ..
-   ```
-
-4. Set up Firebase project:
-   - Create a Firebase project at [Firebase Console](https://console.firebase.google.com/).
-   - Enable Firestore and Functions.
+2. Set up Firebase project:
    - Install Firebase CLI: `npm install -g firebase-tools`
    - Login: `firebase login`
    - Initialize: `firebase init` (select Functions and Hosting)
+     
+3. Set up facilitator using Firebase Functions:
+   ```bash
+   cd functions
+   npm i
+   ```
+   Set these in Firebase Functions config:
+   ```bash
+   firebase functions:config:set solana.rpcurl="https://api.mainnet-beta.solana.com"
+   firebase functions:config:set solana.memberspl="YOUR_SPL_TOKEN_MINT_ADDRESS"
+   firebase functions:config:set solana.membersplreq="MINIMUM_BALANCE_FOR_MEMBERSHIP"
+   firebase functions:config:set solana.merchanttokenacc="MERCHANT_USDC_TOKEN_ACCOUNT"
+   ```
+   
+   Get current env variables - firebase functions:config:get
+   [required] after setting env vars, download current env variable so that local emulator can run - `firebase functions:config:get > .runtimeconfig.json`
 
-## Configuration
+   Run the local simulator
+   `firebase emulators:start --only functions`
 
-### Environment Variables
+   Check endpoint
+   - **GET /weather**: Requires x402 payment header. Returns weather data if payment is valid.
 
-Create `.env` files or set in Firebase config:
-
-#### Backend (Firebase Functions Config)
-Set these in Firebase Functions config:
-```bash
-firebase functions:config:set solana.rpcurl="https://api.mainnet-beta.solana.com"
-firebase functions:config:set solana.memberspl="YOUR_SPL_TOKEN_MINT_ADDRESS"
-firebase functions:config:set solana.membersplreq="MINIMUM_BALANCE_FOR_MEMBERSHIP"
-firebase functions:config:set solana.merchanttokenacc="MERCHANT_USDC_TOKEN_ACCOUNT"
-```
-
-#### Frontend (Vite Environment)
-Create `host/.env`:
-```env
-VITE_RPC_ENDPOINT=https://api.mainnet-beta.solana.com
-VITE_MERCHANT_TOKEN_ACCOUNT=YOUR_MERCHANT_USDC_TOKEN_ACCOUNT
-VITE_FIREBASE_FUNCTIONS_URL=https://your-project.firebaseapp.com
-```
+5. Set up web client:
+   ```bash
+   cd host
+   npm i
+   ```
+   
+   Create `host/.env`:
+   ```env
+   VITE_RPC_ENDPOINT=https://api.mainnet-beta.solana.com
+   VITE_MERCHANT_TOKEN_ACCOUNT=YOUR_MERCHANT_USDC_TOKEN_ACCOUNT
+   VITE_FIREBASE_FUNCTIONS_URL=https://your-project.firebaseapp.com
+   ```
+   
+   Run `npm run dev`
+   
+   Open browser to `http://localhost:5173` (or Vite's default port).
 
 ### Constants
 - **USDC Mint**: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` (mainnet)
 - **Price**: 10,000 ($0.01 USDC per call)
 - **Membership Token**: Configure your SPL token mint for membership checks.
 
-## Usage
-
-### Development
-
-1. Start Firebase Functions emulators:
-   ```bash
-   firebase emulators:start --only functions
-   ```
-
-2. Run frontend in development mode:
-   ```bash
-   cd host
-   npm run dev
-   ```
-
-3. Open browser to `http://localhost:5173` (or Vite's default port).
-
 ### Testing Payment Flow
 
 1. Connect Phantom wallet.
 2. Click "Pay & Fetch /weather" to make a payment and retrieve data.
 3. Membership holders (based on SPL balance) skip fee verification.
-
-### API Endpoints
-
-- **GET /weather**: Requires x402 payment header. Returns weather data if payment is valid.
 
 ## License
 
