@@ -144,7 +144,7 @@ const Wallet = () => {
    * @returns {object} The API response data.
    * @throws {Error} If the API call fails.
    */
-  const callWeatherAPI = async (xPayment) => {
+  const callAPI = async (xPayment) => {
     const response = await fetch(
       import.meta.env.VITE_FIREBASE_FUNCTIONS_URL ||
         "http://127.0.0.1:5001/weather",
@@ -175,7 +175,7 @@ const Wallet = () => {
     try {
       const { signed, ref } = await createPaymentTransaction();
       const xPayment = buildX402Header(signed, ref);
-      const data = await callWeatherAPI(xPayment);
+      const data = await callAPI(xPayment);
       setOutput(`Temperature: ${data.temperatureF}°F`);
     } catch (error) {
       setOutput(`Error: ${error.message}`);

@@ -1,11 +1,11 @@
 // import './App.css'
 
-import Wallet from "../components/Wallet";
+import Demo from "../components/Demo";
 
 function App() {
   return (
     <div className="app">
-      <Wallet />
+      <Demo />
     </div>
   );
 }
