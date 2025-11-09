@@ -1,18 +1,18 @@
 # x402-sol-member
 
-x402 is not hard to self-host. This is a minimal dependency x402 facilitator (using serverless Firebase Functions) for checking member-only access based on SPL token balance or processing a x402 payment. This sample project comes with a minimum React client for pay-per-call API access with Solana-based USDC payments.
+You can add SPL token balance check to a x402 facilitator. This is a minimal (no-viem) dependency x402 facilitator (using serverless Firebase Functions) for providing a member-only access based on SPL token balance or processing a x402 payment. This sample project comes with a minimum React client for pay-per-call API access with Solana-based USDC payments.
 
 ## Why?
 1. You can host your x402 facilitator using serverless Firebase Functions (pay-for-use plan). Your facilitator does not even need to hold any pkeys.
-2. You can customize x402 SOL payment requirements including SPL-based membership access.
+2. You can customize x402 payment requirements including SPL-based membership access in this example.
 
 ## Features
 
 - **x402 Payment Integration**: Supports x402 protocol for micro-payments on Solana.
-- **Membership Detection**: Checks SPL token balance for membership status and applies discounts.
-- **Firebase Backend**: Cloud Functions for payment verification and settlement.
+- **Membership Detection**: Checks SPL token balance for membership status and skip payment broadcasting (i.e., free API access for members).
+- **Firebase Backend**: Serverless Cloud Functions for payment verification and settlement. Pay-per-use serverless setup instead of dedicated server hosting.
 - **React Frontend**: Simple UI for connecting Phantom wallet and making payments.
-- **Minimal Dependencies**: Lightweight implementation focused on core functionality.
+- **Minimal Dependencies**: Lightweight implementation focused on core functionality. No viem, no typescripts.
 
 ## Architecture
 
@@ -56,7 +56,7 @@ x402 is not hard to self-host. This is a minimal dependency x402 facilitator (us
    Get current env variables - firebase functions:config:get
    [required] after setting env vars, download current env variable so that local emulator can run - `firebase functions:config:get > .runtimeconfig.json`
 
-   Run the local simulator
+   Run the local Firebase Fucntions simulator
    `firebase emulators:start --only functions`
 
    Check endpoint
