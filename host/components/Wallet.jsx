@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { Buffer } from "buffer";
-
 import {
   TransactionInstruction,
   PublicKey,
@@ -124,15 +122,20 @@ const Wallet = () => {
    * @returns {string} Base64-encoded x402 header.
    */
   const buildX402Header = (signed, ref) => {
-    const txBase64 = Buffer.from(signed.serialize()).toString("base64");
-    return Buffer.from(
+    const uint8ArrayToBase64 = (uint8Array) => {
+      let binary = '';
+      uint8Array.forEach(byte => binary += String.fromCharCode(byte));
+      return btoa(binary);
+    };
+    const txBase64 = uint8ArrayToBase64(signed.serialize());
+    return btoa(
       JSON.stringify({
         x402Version: 1,
         scheme: "exact",
         network: `solana-mainnet-beta`,
         payload: { txBase64, reference: ref },
-      }),
-    ).toString("base64");
+      })
+    );
   };
 
   /**
