@@ -153,14 +153,22 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
   const rpcUrl = functions.config().solana.rpcurl;
   const connection = new Connection(rpcUrl);
 
-  // Check if fee payer is a member (for discounts)
+  // Check if fee payer is a member (for free access)
   const isMember = await checkMembership(connection, feePayer);
   if (isMember) {
-    console.log(`member balance greater than req, skipping feePayer check`);
-    return { success: true, value: feePayer };
+    console.log(`member balance greater than req, granting free access`);
+    return { 
+      success: true, 
+      isMemberAccess: true,
+      feePayer: feePayer.toBase58(),
+      txHash: null,
+      networkId: null,
+      error: null,
+      message: "Member free access granted"
+    };
   } else {
     console.log(
-      `non-member balance less than req, proceeding with feePayer check`,
+      `non-member balance less than req, proceeding with payment verification`,
     );
   }
 
@@ -168,7 +176,12 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
   try {
     verifyTransaction(tx, req);
   } catch (e) {
-    return { success: false, error: e.message };
+    return { 
+      success: false, 
+      txHash: null,
+      networkId: null,
+      error: e.message 
+    };
   }
 
   // Broadcast the transaction to the network
@@ -178,9 +191,19 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
       skipPreflight: true,
     });
     console.log("[DEBUG] Transaction broadcasted:", sig);
-    return { success: true, value: sig };
+    return { 
+      success: true, 
+      txHash: sig,
+      networkId: "solana-mainnet-beta",
+      error: null 
+    };
   } catch (e) {
-    return { success: false, error: e.message };
+    return { 
+      success: false, 
+      txHash: null,
+      networkId: null,
+      error: e.message 
+    };
   }
 }
 
@@ -230,8 +253,20 @@ exports.weather = functions.https.onRequest((req, res) => {
           maxAmountRequired: PRICE.toString(),
           payTo: MERCHANT_TOKEN_ACCOUNT.toBase58(),
           resource: "GET /weather",
-          description: "Weather API per call (0.01 USDC)",
+          description: "Weather API per call (0.01 USDC). Member free access available.",
+          mimeType: "application/json",
+          outputSchema: {
+            type: "object",
+            properties: {
+              temperatureF: { type: "number" }
+            }
+          },
           maxTimeoutSeconds: 120,
+          extra: {
+            memberType: "free access",
+            memberSPLToken: functions.config().solana.memberspl,
+            memberRequirement: functions.config().solana.membersplreq,
+          }
         },
       ],
     };
@@ -249,12 +284,34 @@ exports.weather = functions.https.onRequest((req, res) => {
         error: result.error,
       });
     }
-    const txHash = result.value;
+
+    // Handle member free access
+    if (result.isMemberAccess) {
+      console.log("[DEBUG] Member free access granted:", result.feePayer);
+      // Create member access receipt
+      const receipt = {
+        memberAccess: true,
+        feePayer: result.feePayer,
+        message: result.message,
+        accessedAt: new Date().toISOString(),
+      };
+      // Set response header with base64-encoded receipt
+      res.set(
+        "X-PAYMENT-RESPONSE",
+        Buffer.from(JSON.stringify(receipt)).toString("base64"),
+      );
+      // Return weather data
+      return res.json({ temperatureF: 72 });
+    }
+
+    // Handle regular payment settlement
+    const txHash = result.txHash;
     console.log("[DEBUG] Payment settled:", txHash);
     if (txHash) {
       // Create payment receipt
       const receipt = {
         txHash,
+        networkId: result.networkId,
         settledAt: new Date().toISOString(),
       };
       // Set response header with base64-encoded receipt
