@@ -309,9 +309,9 @@ const Wallet = () => {
 
       setWeatherData(data);
       setStatusMessage(
-        receipt?.memberAccess 
-          ? "✅ Member free access granted!" 
-          : `✅ Payment settled! Transaction: ${receipt?.txHash?.slice(0, 8)}...`
+        receipt?.txHash 
+          ? `✅ Payment settled! Transaction: ${receipt?.txHash?.slice(0, 8)}...`
+          : "✅ Member access granted. No payment required. Tx not broadcasted"
       );
       setCurrentStep("complete");
       
@@ -320,6 +320,145 @@ const Wallet = () => {
       setErrorMessage(`Payment submission failed: ${error.message}`);
       setStatusMessage("❌ Payment failed");
       setCurrentStep("tx-signed");
+      throw error;
+    }
+  };
+
+  /**
+   * Combined Step 4-6: Process payment (build, sign, submit)
+   */
+  const processPayment = async (requirements) => {
+    setErrorMessage("");
+    setCurrentStep("building-tx");
+    
+    const memberNote = membershipStatus?.isMember 
+      ? " (Member - server may grant free access)" 
+      : " (Non-member - payment required)";
+    setStatusMessage("🔨 Building payment transaction..." + memberNote);
+    
+    try {
+      // Build transaction
+      const paymentSpec = requirements.accepts[0];
+      const USDC_MINT = new PublicKey(paymentSpec.asset);
+      const MERCHANT_TOKEN_ACCOUNT = new PublicKey(paymentSpec.payTo);
+      const PRICE = Number(paymentSpec.maxAmountRequired);
+
+      // Get the buyer's associated token account for USDC
+      const buyerATA = await getAssociatedTokenAddress(
+        USDC_MINT,
+        provider.publicKey,
+      );
+
+      // Create a new transaction with recent blockhash
+      const { blockhash } = await connection.getLatestBlockhash();
+      const tx = new Transaction({
+        recentBlockhash: blockhash,
+        feePayer: provider.publicKey,
+      });
+
+      // Add USDC transfer instruction
+      tx.add(
+        createTransferCheckedInstruction(
+          buyerATA,
+          USDC_MINT,
+          MERCHANT_TOKEN_ACCOUNT,
+          provider.publicKey,
+          PRICE,
+          6, // USDC has 6 decimals
+        ),
+      );
+
+      // Generate a unique reference for the payment
+      const ref = crypto.randomUUID();
+      setPaymentReference(ref);
+      
+      // Add memo instruction with x402 reference
+      tx.add(
+        new TransactionInstruction({
+          keys: [],
+          programId: new PublicKey(
+            "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr", // Solana memo program
+          ),
+          data: new TextEncoder().encode(`x402:${ref}`),
+        }),
+      );
+
+      // Add compute budget instructions for efficient execution
+      tx.add(
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 130_000 }),
+        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 0 }),
+      );
+
+      const memberStatusMsg = membershipStatus?.isMember 
+        ? " - Member: Server will decide to broadcast or bypass"
+        : "";
+      setStatusMessage(`✅ Transaction built (${PRICE / 1_000_000} USDC)${memberStatusMsg}`);
+      setCurrentStep("tx-built");
+
+      // Sign transaction
+      setCurrentStep("signing");
+      setStatusMessage("✍️ Requesting signature from Phantom wallet...");
+      
+      const signed = await provider.signTransaction(tx);
+      setSignedTransaction(signed);
+      setStatusMessage("✅ Transaction signed by wallet");
+      setCurrentStep("tx-signed");
+
+      // Submit payment
+      setCurrentStep("submitting");
+      setStatusMessage("📤 Submitting payment to /weather endpoint...");
+      
+      // Build x402 payment header
+      const uint8ArrayToBase64 = (uint8Array) => {
+        let binary = '';
+        uint8Array.forEach(byte => binary += String.fromCharCode(byte));
+        return btoa(binary);
+      };
+      
+      const txBase64 = uint8ArrayToBase64(signed.serialize());
+      
+      const xPayment = btoa(
+        JSON.stringify({
+          x402Version: requirements.x402Version,
+          scheme: paymentSpec.scheme,
+          network: paymentSpec.network,
+          payload: { txBase64, reference: ref },
+        })
+      );
+
+      // Call API with x-payment header
+      const response = await fetch(API_URL, {
+        method: "GET",
+        headers: { "X-PAYMENT": xPayment },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Check for payment response header
+      const paymentResponse = response.headers.get("X-PAYMENT-RESPONSE");
+      let receipt = null;
+      if (paymentResponse) {
+        receipt = JSON.parse(atob(paymentResponse));
+      }
+
+      setWeatherData(data);
+      setStatusMessage(
+        receipt?.txHash 
+          ? `✅ Payment settled! Transaction: ${receipt?.txHash?.slice(0, 8)}...`
+          : "✅ Member access granted. No payment required. Tx not broadcasted"
+      );
+      setCurrentStep("complete");
+      
+      return { data, receipt };
+    } catch (error) {
+      setErrorMessage(`Payment processing failed: ${error.message}`);
+      setStatusMessage("❌ Payment failed");
+      setCurrentStep("membership-checked");
       throw error;
     }
   };
@@ -344,14 +483,8 @@ const Wallet = () => {
       // Step 3: Check membership
       await checkMembership();
       
-      // Step 4: Build transaction (always build regardless of membership)
-      const { tx, ref } = await buildPaymentTransaction(requirements);
-      
-      // Step 5: Sign transaction
-      const signed = await signTransaction(tx);
-      
-      // Step 6: Submit payment (server decides to broadcast or grant free access)
-      await submitPayment(signed, ref, requirements);
+      // Step 4: Process payment (build, sign, submit)
+      await processPayment(requirements);
       
     } catch (error) {
       console.error("Flow error:", error);
@@ -549,7 +682,7 @@ const Wallet = () => {
                 <br />
                 {membershipStatus.isMember && (
                   <span style={{ color: "#000", fontWeight: "500" }}>
-                    Note: Transaction will be built but server may grant free access
+                    Note: <b>Transaction will be built for verification. Upon successful verification, x402 facilitator will grant free access and skip broadcasting payment.</b>
                   </span>
                 )}
               </div>
@@ -558,7 +691,7 @@ const Wallet = () => {
         </div>
       )}
 
-      {/* Step 4: Build Transaction */}
+      {/* Step 4: Process Payment */}
       {membershipStatus && (
         <div style={{ 
           marginBottom: "24px", 
@@ -573,32 +706,32 @@ const Wallet = () => {
             textTransform: "uppercase",
             letterSpacing: "0.5px"
           }}>
-            Step 4 · Build Transaction
+            Step 4 · Process Payment
           </h2>
           <p style={{ fontSize: "12px", color: "#666", marginBottom: "12px", lineHeight: "1.5" }}>
-            Construct Solana transaction (required for all users - server decides to settle or bypass)
+            Build, sign, and submit transaction. For members, server verifies membership and may bypass payment.
           </p>
           <button 
             onClick={async () => {
               try {
-                await buildPaymentTransaction(paymentRequirements);
+                await processPayment(paymentRequirements);
               } catch (e) {
                 console.error(e);
               }
             }}
-            disabled={currentStep !== "membership-checked" && currentStep !== "tx-built"}
+            disabled={currentStep !== "membership-checked"}
             style={{
               padding: "12px 24px",
               fontSize: "13px",
-              cursor: (currentStep === "membership-checked" || currentStep === "tx-built") ? "pointer" : "not-allowed",
-              backgroundColor: (currentStep === "membership-checked" || currentStep === "tx-built") ? "#000000" : "#f5f5f5",
-              color: (currentStep === "membership-checked" || currentStep === "tx-built") ? "#ffffff" : "#999",
+              cursor: currentStep === "membership-checked" ? "pointer" : "not-allowed",
+              backgroundColor: currentStep === "membership-checked" ? "#000000" : "#f5f5f5",
+              color: currentStep === "membership-checked" ? "#ffffff" : "#999",
               border: "1px solid #000000",
               fontWeight: "400",
               letterSpacing: "0.3px"
             }}
           >
-            Build Transaction
+            Process Payment
           </button>
           {currentStep === "tx-built" && paymentReference && (
             <div style={{ 
@@ -626,96 +759,6 @@ const Wallet = () => {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Step 5: Sign Transaction */}
-      {currentStep === "tx-built" && (
-        <div style={{ 
-          marginBottom: "24px", 
-          padding: "24px", 
-          border: "1px solid #e0e0e0",
-          backgroundColor: "#fafafa"
-        }}>
-          <h2 style={{ 
-            fontSize: "14px", 
-            fontWeight: "500", 
-            marginBottom: "12px",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px"
-          }}>
-            Step 5 · Sign Transaction
-          </h2>
-          <p style={{ fontSize: "12px", color: "#666", marginBottom: "12px", lineHeight: "1.5" }}>
-            Approve transaction in Phantom wallet
-          </p>
-          <button 
-            onClick={async () => {
-              try {
-                const { tx: builtTx } = await buildPaymentTransaction(paymentRequirements);
-                await signTransaction(builtTx);
-              } catch (e) {
-                console.error(e);
-              }
-            }}
-            style={{
-              padding: "12px 24px",
-              fontSize: "13px",
-              cursor: "pointer",
-              backgroundColor: "#000000",
-              color: "#ffffff",
-              border: "1px solid #000000",
-              fontWeight: "400",
-              letterSpacing: "0.3px"
-            }}
-          >
-            Sign with Phantom
-          </button>
-        </div>
-      )}
-
-      {/* Step 6: Submit Payment */}
-      {(currentStep === "tx-signed" || signedTransaction) && (
-        <div style={{ 
-          marginBottom: "24px", 
-          padding: "24px", 
-          border: "1px solid #e0e0e0",
-          backgroundColor: "#fafafa"
-        }}>
-          <h2 style={{ 
-            fontSize: "14px", 
-            fontWeight: "500", 
-            marginBottom: "12px",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px"
-          }}>
-            Step 6 · Submit Payment
-          </h2>
-          <p style={{ fontSize: "12px", color: "#666", marginBottom: "12px", lineHeight: "1.5" }}>
-            Send signed transaction - server will verify membership and decide to settle or grant free access
-          </p>
-          <button 
-            onClick={async () => {
-              try {
-                await submitPayment(signedTransaction, paymentReference, paymentRequirements);
-              } catch (e) {
-                console.error(e);
-              }
-            }}
-            disabled={currentStep !== "tx-signed"}
-            style={{
-              padding: "12px 24px",
-              fontSize: "13px",
-              cursor: currentStep === "tx-signed" ? "pointer" : "not-allowed",
-              backgroundColor: currentStep === "tx-signed" ? "#000000" : "#f5f5f5",
-              color: currentStep === "tx-signed" ? "#ffffff" : "#999",
-              border: "1px solid #000000",
-              fontWeight: "400",
-              letterSpacing: "0.3px"
-            }}
-          >
-            Submit Payment
-          </button>
         </div>
       )}
 
@@ -759,7 +802,7 @@ const Wallet = () => {
             textTransform: "uppercase",
             letterSpacing: "0.5px"
           }}>
-            Payment Successful
+            x402 Access Granted
           </h2>
           <div style={{ fontSize: "48px", fontWeight: "200", margin: "16px 0" }}>
             {weatherData.temperatureF}°F
