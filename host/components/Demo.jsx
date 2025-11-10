@@ -36,7 +36,7 @@ const Wallet = () => {
   const [canProceedToPayment, setCanProceedToPayment] = useState(false);
 
   // Configuration from environment variables (Vite uses import.meta.env)
-  const RPC =
+  const SOLANA_RPC =
     import.meta.env.VITE_RPC_ENDPOINT || "https://api.mainnet-beta.solana.com";
   const API_URL =
     import.meta.env.VITE_FIREBASE_FUNCTIONS_URL ||
@@ -55,7 +55,7 @@ const Wallet = () => {
     try {
       setStatusMessage("Connecting to Phantom wallet...");
       await provider.connect();
-      const connection = new Connection(RPC, "confirmed");
+      const connection = new Connection(SOLANA_RPC, "confirmed");
       setProvider(provider);
       setConnection(connection);
       setStatusMessage(
