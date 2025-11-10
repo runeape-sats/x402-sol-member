@@ -4,11 +4,12 @@ import {
   PublicKey,
   Transaction,
   Connection,
+  ComputeBudgetProgram,
 } from "@solana/web3.js";
-import { ComputeBudgetProgram } from "@solana/web3.js";
 import {
   getAssociatedTokenAddress,
   createTransferCheckedInstruction,
+  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
 /**
@@ -19,15 +20,18 @@ const Wallet = () => {
   // Wallet state
   const [provider, setProvider] = useState(null);
   const [connection, setConnection] = useState(null);
-  
+
   // x402 flow state
   const [currentStep, setCurrentStep] = useState("idle"); // idle, fetching-requirements, checking-membership, building-tx, signing, submitting, complete
   const [paymentRequirements, setPaymentRequirements] = useState(null);
   const [membershipStatus, setMembershipStatus] = useState(null);
   const [signedTransaction, setSignedTransaction] = useState(null);
   const [paymentReference, setPaymentReference] = useState(null);
+  const [transactionHash, setTransactionHash] = useState(null);
   const [weatherData, setWeatherData] = useState(null);
-  const [statusMessage, setStatusMessage] = useState("Connect your wallet to start");
+  const [statusMessage, setStatusMessage] = useState(
+    "Connect your wallet to start",
+  );
   const [errorMessage, setErrorMessage] = useState("");
   const [usdcBalance, setUsdcBalance] = useState(0);
   const [canProceedToPayment, setCanProceedToPayment] = useState(false);
@@ -35,18 +39,9 @@ const Wallet = () => {
   // Configuration from environment variables (Vite uses import.meta.env)
   const RPC =
     import.meta.env.VITE_RPC_ENDPOINT || "https://api.mainnet-beta.solana.com";
-  const API_URL = import.meta.env.VITE_FIREBASE_FUNCTIONS_URL || "http://127.0.0.1:5001/weather";
-
-  /**
-   * Helper function to determine status message color based on content
-   */
-  const getStatusMessageColor = (message) => {
-    if (message.startsWith("✅")) return "#4caf50"; // Green for success
-    if (message.startsWith("❌")) return "#f44336"; // Red for errors
-    if (message.startsWith("⚠️")) return "#ffeb3b"; // Yellow for warnings
-    if (message.includes("Failed") || message.includes("failed")) return "#f44336"; // Red for failed states
-    return "#333333"; // Default dark gray for neutral/in-progress
-  };
+  const API_URL =
+    import.meta.env.VITE_FIREBASE_FUNCTIONS_URL ||
+    "http://127.0.0.1:5001/weather";
 
   /**
    * Step 1: Connect to Phantom wallet
@@ -64,7 +59,9 @@ const Wallet = () => {
       const connection = new Connection(RPC, "confirmed");
       setProvider(provider);
       setConnection(connection);
-      setStatusMessage(`✅ Connected: ${provider.publicKey.toBase58().slice(0, 8)}...`);
+      setStatusMessage(
+        `✅ Connected: ${provider.publicKey.toBase58().slice(0, 8)}...`,
+      );
       setCurrentStep("idle");
     } catch (error) {
       setErrorMessage(`Connection failed: ${error.message}`);
@@ -78,8 +75,10 @@ const Wallet = () => {
   const fetchPaymentRequirements = async () => {
     setErrorMessage("");
     setCurrentStep("fetching-requirements");
-    setStatusMessage("� Fetching payment requirements from /weather endpoint...");
-    
+    setStatusMessage(
+      "� Fetching payment requirements from /weather endpoint...",
+    );
+
     try {
       // Call the endpoint WITHOUT x-payment header to get 402 response
       const response = await fetch(API_URL, {
@@ -89,7 +88,9 @@ const Wallet = () => {
       if (response.status === 402) {
         const requirements = await response.json();
         setPaymentRequirements(requirements);
-        setStatusMessage("✅ Received payment requirements (402 Payment Required)");
+        setStatusMessage(
+          "✅ Received payment requirements (402 Payment Required)",
+        );
         setCurrentStep("requirements-received");
         return requirements;
       } else {
@@ -115,7 +116,7 @@ const Wallet = () => {
     setErrorMessage("");
     setCurrentStep("checking-membership");
     setStatusMessage("🔍 Checking membership status...");
-    
+
     try {
       const memberInfo = paymentRequirements.accepts[0].extra;
       const memberSPLToken = memberInfo?.memberSPLToken;
@@ -126,7 +127,7 @@ const Wallet = () => {
           isMember: false,
           balance: 0,
           required: 0,
-          message: "No membership program available"
+          message: "No membership program available",
         });
         setStatusMessage("ℹ️ No membership program configured");
         setCurrentStep("membership-checked");
@@ -134,18 +135,19 @@ const Wallet = () => {
       }
 
       // Check user's token balance
-      const { TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
       const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
         provider.publicKey,
-        { programId: TOKEN_PROGRAM_ID }
+        { programId: TOKEN_PROGRAM_ID },
       );
 
       const memberTokenAccount = tokenAccounts.value.find(
-        (account) => account.account.data.parsed.info.mint === memberSPLToken
+        (account) => account.account.data.parsed.info.mint === memberSPLToken,
       );
 
-      const balance = memberTokenAccount 
-        ? Number(memberTokenAccount.account.data.parsed.info.tokenAmount.uiAmount)
+      const balance = memberTokenAccount
+        ? Number(
+            memberTokenAccount.account.data.parsed.info.tokenAmount.uiAmount,
+          )
         : 0;
 
       const isMember = balance > memberRequirement;
@@ -155,33 +157,32 @@ const Wallet = () => {
         balance,
         required: memberRequirement,
         tokenAddress: memberSPLToken,
-        message: isMember 
+        message: isMember
           ? "✅ Member status: Eligible for free access!"
-          : `❌ Not a member: ${balance} tokens (need > ${memberRequirement})`
+          : `❌ Not a member: ${balance} tokens (need >= ${memberRequirement})`,
       });
 
       setStatusMessage(
-        isMember 
+        isMember
           ? `✅ Member detected! (${balance} tokens) - Transaction will be built but server may grant free access`
-          : `Not a member. Balance: ${balance}, Required: > ${memberRequirement} - Payment required`
+          : `Not a member. Balance: ${balance}, Required: > ${memberRequirement} - Payment required`,
       );
       setCurrentStep("membership-checked");
-      
+
       // Check USDC balance
       const usdcMint = paymentRequirements.accepts[0].asset;
       const usdcTokenAccount = tokenAccounts.value.find(
-        (account) => account.account.data.parsed.info.mint === usdcMint
+        (account) => account.account.data.parsed.info.mint === usdcMint,
       );
-      const usdcBal = usdcTokenAccount 
+      const usdcBal = usdcTokenAccount
         ? Number(usdcTokenAccount.account.data.parsed.info.tokenAmount.uiAmount)
         : 0;
       setUsdcBalance(usdcBal);
-      
+
       // Check if sufficient for payment
       const PRICE = Number(paymentRequirements.accepts[0].maxAmountRequired);
       const sufficient = usdcBal * 1_000_000 >= PRICE;
       setCanProceedToPayment(sufficient);
-      
     } catch (error) {
       setErrorMessage(`Failed to check membership: ${error.message}`);
       setStatusMessage("❌ Membership check failed");
@@ -196,12 +197,12 @@ const Wallet = () => {
   const processPayment = async (requirements) => {
     setErrorMessage("");
     setCurrentStep("building-tx");
-    
-    const memberNote = membershipStatus?.isMember 
-      ? " (Member - server may grant free access)" 
+
+    const memberNote = membershipStatus?.isMember
+      ? " (Member - server may grant free access)"
       : " (Non-member - payment required)";
     setStatusMessage("🔨 Building payment transaction..." + memberNote);
-    
+
     try {
       // Build transaction
       const paymentSpec = requirements.accepts[0];
@@ -237,7 +238,7 @@ const Wallet = () => {
       // Generate a unique reference for the payment
       const ref = crypto.randomUUID();
       setPaymentReference(ref);
-      
+
       // Add memo instruction with x402 reference
       tx.add(
         new TransactionInstruction({
@@ -255,16 +256,18 @@ const Wallet = () => {
         ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 0 }),
       );
 
-      const memberStatusMsg = membershipStatus?.isMember 
+      const memberStatusMsg = membershipStatus?.isMember
         ? " - Member: Server will decide to broadcast or bypass"
         : "";
-      setStatusMessage(`✅ Transaction built (${PRICE / 1_000_000} USDC)${memberStatusMsg}`);
+      setStatusMessage(
+        `✅ Transaction built (${PRICE / 1_000_000} USDC)${memberStatusMsg}`,
+      );
       setCurrentStep("tx-built");
 
       // Sign transaction
       setCurrentStep("signing");
       setStatusMessage("✍️ Requesting signature from Phantom wallet...");
-      
+
       const signed = await provider.signTransaction(tx);
       setSignedTransaction(signed);
       setStatusMessage("✅ Transaction signed by wallet");
@@ -273,23 +276,23 @@ const Wallet = () => {
       // Submit payment
       setCurrentStep("submitting");
       setStatusMessage("📤 Submitting payment to /weather endpoint...");
-      
+
       // Build x402 payment header
       const uint8ArrayToBase64 = (uint8Array) => {
-        let binary = '';
-        uint8Array.forEach(byte => binary += String.fromCharCode(byte));
+        let binary = "";
+        uint8Array.forEach((byte) => (binary += String.fromCharCode(byte)));
         return btoa(binary);
       };
-      
+
       const txBase64 = uint8ArrayToBase64(signed.serialize());
-      
+
       const xPayment = btoa(
         JSON.stringify({
           x402Version: requirements.x402Version,
           scheme: paymentSpec.scheme,
           network: paymentSpec.network,
           payload: { txBase64, reference: ref },
-        })
+        }),
       );
 
       // Call API with x-payment header
@@ -304,22 +307,28 @@ const Wallet = () => {
       }
 
       const data = await response.json();
-      
+
+      // console.log("API response data:", data);
+      console.log("Full response:", response);
       // Check for payment response header
       const paymentResponse = response.headers.get("X-PAYMENT-RESPONSE");
       let receipt = null;
       if (paymentResponse) {
         receipt = JSON.parse(atob(paymentResponse));
+        console.log("Payment receipt:", receipt);
+        if (receipt?.txHash) {
+          setTransactionHash(receipt.txHash);
+        }
       }
 
       setWeatherData(data);
       setStatusMessage(
-        receipt?.txHash 
+        receipt?.txHash
           ? `✅ Payment settled! Transaction: ${receipt?.txHash?.slice(0, 8)}...`
-          : "✅ Member access granted. No payment required. Tx not broadcasted"
+          : "✅ Member access granted. No payment required. Tx not broadcasted",
       );
       setCurrentStep("complete");
-      
+
       return { data, receipt };
     } catch (error) {
       setErrorMessage(`Payment processing failed: ${error.message}`);
@@ -342,16 +351,15 @@ const Wallet = () => {
       // Reset state
       setWeatherData(null);
       setErrorMessage("");
-      
+
       // Step 2: Fetch requirements
       const requirements = await fetchPaymentRequirements();
-      
+
       // Step 3: Check membership
       await checkMembership();
-      
+
       // Step 4: Process payment (build, sign, submit)
       await processPayment(requirements);
-      
     } catch (error) {
       console.error("Flow error:", error);
     }
@@ -366,56 +374,71 @@ const Wallet = () => {
     setMembershipStatus(null);
     setSignedTransaction(null);
     setPaymentReference(null);
+    setTransactionHash(null);
     setWeatherData(null);
     setErrorMessage("");
-    setStatusMessage(provider ? "Ready to start new payment flow" : "Connect your wallet to start");
+    setStatusMessage(
+      provider
+        ? "Ready to start new payment flow"
+        : "Connect your wallet to start",
+    );
   };
 
   return (
-    <div style={{ 
-      maxWidth: "1000px", 
-      margin: "0 auto", 
-      padding: "40px 20px", 
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      backgroundColor: "#ffffff",
-      color: "#000000",
-      minHeight: "100vh"
-    }}>
-      <h1 style={{ 
-        fontSize: "32px", 
-        fontWeight: "300", 
-        marginBottom: "8px",
-        letterSpacing: "-0.5px" 
-      }}>
+    <div
+      style={{
+        maxWidth: "1000px",
+        margin: "0 auto",
+        padding: "40px 20px",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        backgroundColor: "#ffffff",
+        color: "#000000",
+        minHeight: "100vh",
+      }}
+    >
+      <h1
+        style={{
+          fontSize: "32px",
+          fontWeight: "300",
+          marginBottom: "8px",
+          letterSpacing: "-0.5px",
+        }}
+      >
         x402 Payment Protocol
       </h1>
-      <p style={{ 
-        color: "#666", 
-        fontSize: "14px", 
-        fontWeight: "300",
-        marginBottom: "40px" 
-      }}>
+      <p
+        style={{
+          color: "#666",
+          fontSize: "14px",
+          fontWeight: "300",
+          marginBottom: "40px",
+        }}
+      >
         Solana Weather API · Step-by-step payment flow demonstration
       </p>
 
       {/* Step 1: Wallet Connection */}
-      <div style={{ 
-        marginBottom: "24px", 
-        padding: "24px", 
-        border: "1px solid #e0e0e0",
-        backgroundColor: "#fafafa"
-      }}>
-        <h2 style={{ 
-          fontSize: "14px", 
-          fontWeight: "500", 
-          marginBottom: "12px",
-          textTransform: "uppercase",
-          letterSpacing: "0.5px"
-        }}>
+      <div
+        style={{
+          marginBottom: "24px",
+          padding: "24px",
+          border: "1px solid #e0e0e0",
+          backgroundColor: "#fafafa",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "14px",
+            fontWeight: "500",
+            marginBottom: "12px",
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+          }}
+        >
           Step 1 · Wallet Connection
         </h2>
-        <button 
-          onClick={connectPhantom} 
+        <button
+          onClick={connectPhantom}
           disabled={provider !== null}
           style={{
             padding: "12px 24px",
@@ -426,64 +449,95 @@ const Wallet = () => {
             border: "1px solid #000000",
             fontWeight: "400",
             letterSpacing: "0.3px",
-            transition: "all 0.2s"
+            transition: "all 0.2s",
           }}
         >
-          {provider ? `Connected ${provider.publicKey.toBase58().slice(0, 8)}...` : "Connect Phantom Wallet"}
+          {provider
+            ? `Connected ${provider.publicKey.toBase58().slice(0, 8)}...`
+            : "Connect Phantom Wallet"}
         </button>
       </div>
 
       {/* Step 2: Fetch Payment Requirements */}
       {provider && (
-        <div style={{ 
-          marginBottom: "24px", 
-          padding: "24px", 
-          border: "1px solid #e0e0e0",
-          backgroundColor: "#fafafa"
-        }}>
-          <h2 style={{ 
-            fontSize: "14px", 
-            fontWeight: "500", 
-            marginBottom: "12px",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px"
-          }}>
+        <div
+          style={{
+            marginBottom: "24px",
+            padding: "24px",
+            border: "1px solid #e0e0e0",
+            backgroundColor: "#fafafa",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "14px",
+              fontWeight: "500",
+              marginBottom: "12px",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
             Step 2 · Payment Requirements
           </h2>
-          <p style={{ fontSize: "12px", color: "#666", marginBottom: "12px", lineHeight: "1.5" }}>
+          <p
+            style={{
+              fontSize: "12px",
+              color: "#666",
+              marginBottom: "12px",
+              lineHeight: "1.5",
+            }}
+          >
             Retrieve 402 Payment Required response from endpoint
           </p>
-          <button 
+          <button
             onClick={fetchPaymentRequirements}
-            disabled={currentStep !== "idle" && currentStep !== "requirements-received"}
+            disabled={
+              currentStep !== "idle" && currentStep !== "requirements-received"
+            }
             style={{
               padding: "12px 24px",
               fontSize: "13px",
-              cursor: (currentStep === "idle" || currentStep === "requirements-received") ? "pointer" : "not-allowed",
-              backgroundColor: (currentStep === "idle" || currentStep === "requirements-received") ? "#000000" : "#f5f5f5",
-              color: (currentStep === "idle" || currentStep === "requirements-received") ? "#ffffff" : "#999",
+              cursor:
+                currentStep === "idle" ||
+                currentStep === "requirements-received"
+                  ? "pointer"
+                  : "not-allowed",
+              backgroundColor:
+                currentStep === "idle" ||
+                currentStep === "requirements-received"
+                  ? "#000000"
+                  : "#f5f5f5",
+              color:
+                currentStep === "idle" ||
+                currentStep === "requirements-received"
+                  ? "#ffffff"
+                  : "#999",
               border: "1px solid #000000",
               fontWeight: "400",
-              letterSpacing: "0.3px"
+              letterSpacing: "0.3px",
             }}
           >
             Fetch Requirements
           </button>
           {paymentRequirements && (
-            <div style={{ 
-              marginTop: "16px", 
-              padding: "16px", 
-              backgroundColor: "#ffffff", 
-              border: "1px solid #e0e0e0",
-              fontSize: "11px"
-            }}>
-              <pre style={{ 
-                overflow: "auto", 
-                margin: 0, 
-                fontFamily: "monospace",
-                lineHeight: "1.5",
-                color: "#333"
-              }}>
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                backgroundColor: "#ffffff",
+                border: "1px solid #e0e0e0",
+                fontSize: "11px",
+              }}
+            >
+              <pre
+                style={{
+                  overflow: "auto",
+                  margin: 0,
+                  fontFamily: "monospace",
+                  lineHeight: "1.5",
+                  color: "#333",
+                }}
+              >
                 {JSON.stringify(paymentRequirements, null, 2)}
               </pre>
             </div>
@@ -493,70 +547,118 @@ const Wallet = () => {
 
       {/* Step 3: Check Membership */}
       {paymentRequirements && (
-        <div style={{ 
-          marginBottom: "24px", 
-          padding: "24px", 
-          border: "1px solid #e0e0e0",
-          backgroundColor: membershipStatus?.isMember ? "#f0f9ff" : "#fafafa"
-        }}>
-          <h2 style={{ 
-            fontSize: "14px", 
-            fontWeight: "500", 
-            marginBottom: "12px",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px"
-          }}>
+        <div
+          style={{
+            marginBottom: "24px",
+            padding: "24px",
+            border: "1px solid #e0e0e0",
+            backgroundColor: membershipStatus?.isMember ? "#f0f9ff" : "#fafafa",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "14px",
+              fontWeight: "500",
+              marginBottom: "12px",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
             Step 3 · Balance & Membership Check
           </h2>
-          <p style={{ fontSize: "12px", color: "#666", marginBottom: "12px", lineHeight: "1.5" }}>
-            Check if wallet holds required SPL tokens for payment or membership benefits
+          <p
+            style={{
+              fontSize: "12px",
+              color: "#666",
+              marginBottom: "12px",
+              lineHeight: "1.5",
+            }}
+          >
+            Check if wallet holds required SPL tokens for payment or membership
+            benefits
           </p>
-          <button 
+          <button
             onClick={checkMembership}
-            disabled={currentStep !== "requirements-received" && currentStep !== "membership-checked"}
+            disabled={
+              currentStep !== "requirements-received" &&
+              currentStep !== "membership-checked"
+            }
             style={{
               padding: "12px 24px",
               fontSize: "13px",
-              cursor: (currentStep === "requirements-received" || currentStep === "membership-checked") ? "pointer" : "not-allowed",
-              backgroundColor: (currentStep === "requirements-received" || currentStep === "membership-checked") ? "#000000" : "#f5f5f5",
-              color: (currentStep === "requirements-received" || currentStep === "membership-checked") ? "#ffffff" : "#999",
+              cursor:
+                currentStep === "requirements-received" ||
+                currentStep === "membership-checked"
+                  ? "pointer"
+                  : "not-allowed",
+              backgroundColor:
+                currentStep === "requirements-received" ||
+                currentStep === "membership-checked"
+                  ? "#000000"
+                  : "#f5f5f5",
+              color:
+                currentStep === "requirements-received" ||
+                currentStep === "membership-checked"
+                  ? "#ffffff"
+                  : "#999",
               border: "1px solid #000000",
               fontWeight: "400",
-              letterSpacing: "0.3px"
+              letterSpacing: "0.3px",
             }}
           >
             Check
           </button>
           {membershipStatus && (
-            <div style={{ 
-              marginTop: "16px", 
-              padding: "16px", 
-              backgroundColor: "#ffffff", 
-              border: "1px solid #e0e0e0",
-              fontSize: "13px",
-              lineHeight: "1.6"
-            }}>
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                backgroundColor: "#ffffff",
+                border: "1px solid #e0e0e0",
+                fontSize: "13px",
+                lineHeight: "1.6",
+              }}
+            >
               <div style={{ fontWeight: "500", marginBottom: "8px" }}>
                 {membershipStatus.message}
               </div>
-              <div style={{ color: "#666", fontSize: "12px", fontFamily: "monospace" }}>
+              <div
+                style={{
+                  color: "#666",
+                  fontSize: "12px",
+                  fontFamily: "monospace",
+                }}
+              >
                 USDC Balance: {usdcBalance} USDC
                 <br />
-                SPL Token: <a href={`https://solscan.io/token/${membershipStatus.tokenAddress}`} target="_blank" rel="noopener noreferrer">{membershipStatus.tokenAddress?.slice(0, 12)}...</a>
+                SPL Token:{" "}
+                <a
+                  href={`https://solscan.io/token/${membershipStatus.tokenAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {membershipStatus.tokenAddress?.slice(0, 12)}...
+                </a>
                 <br />
                 Balance: {membershipStatus.balance} tokens
                 <br />
-                Required: {'>='} {membershipStatus.required} tokens
+                Required: {">="} {membershipStatus.required} tokens
                 <br />
                 {!canProceedToPayment && (
                   <span style={{ color: "#d32f2f", fontWeight: "500" }}>
-                    ⚠️ Warning: USDC balance insufficient for verification. Step 4 disabled.
+                    ⚠️ Warning: USDC balance insufficient for verification. Step
+                    4 disabled.
                   </span>
                 )}
                 <br />
                 {membershipStatus.isMember && (
                   <span style={{ color: "#000", fontWeight: "500" }}>
-                    Note: <b>Transaction will be built for verification. Upon successful verification, x402 facilitator will grant free access and skip broadcasting payment.</b>
+                    Note:{" "}
+                    <b>
+                      Transaction will be built for verification. Upon
+                      successful verification, x402 facilitator will grant free
+                      access and skip broadcasting payment.
+                    </b>
                   </span>
                 )}
               </div>
@@ -567,25 +669,37 @@ const Wallet = () => {
 
       {/* Step 4: Process Payment */}
       {membershipStatus && (
-        <div style={{ 
-          marginBottom: "24px", 
-          padding: "24px", 
-          border: "1px solid #e0e0e0",
-          backgroundColor: "#fafafa"
-        }}>
-          <h2 style={{ 
-            fontSize: "14px", 
-            fontWeight: "500", 
-            marginBottom: "12px",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px"
-          }}>
+        <div
+          style={{
+            marginBottom: "24px",
+            padding: "24px",
+            border: "1px solid #e0e0e0",
+            backgroundColor: "#fafafa",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "14px",
+              fontWeight: "500",
+              marginBottom: "12px",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
             Step 4 · Process Payment
           </h2>
-          <p style={{ fontSize: "12px", color: "#666", marginBottom: "12px", lineHeight: "1.5" }}>
-            Build, sign, and submit transaction. For members, server verifies membership and may bypass payment.
+          <p
+            style={{
+              fontSize: "12px",
+              color: "#666",
+              marginBottom: "12px",
+              lineHeight: "1.5",
+            }}
+          >
+            Build, sign, and submit transaction. For members, server verifies
+            membership and may bypass payment.
           </p>
-          <button 
+          <button
             onClick={async () => {
               try {
                 await processPayment(paymentRequirements);
@@ -593,31 +707,46 @@ const Wallet = () => {
                 console.error(e);
               }
             }}
-            disabled={currentStep !== "membership-checked" || !canProceedToPayment}
+            disabled={
+              currentStep !== "membership-checked" || !canProceedToPayment
+            }
             style={{
               padding: "12px 24px",
               fontSize: "13px",
-              cursor: (currentStep === "membership-checked" && canProceedToPayment) ? "pointer" : "not-allowed",
-              backgroundColor: (currentStep === "membership-checked" && canProceedToPayment) ? "#000000" : "#f5f5f5",
-              color: (currentStep === "membership-checked" && canProceedToPayment) ? "#ffffff" : "#999",
+              cursor:
+                currentStep === "membership-checked" && canProceedToPayment
+                  ? "pointer"
+                  : "not-allowed",
+              backgroundColor:
+                currentStep === "membership-checked" && canProceedToPayment
+                  ? "#000000"
+                  : "#f5f5f5",
+              color:
+                currentStep === "membership-checked" && canProceedToPayment
+                  ? "#ffffff"
+                  : "#999",
               border: "1px solid #000000",
               fontWeight: "400",
-              letterSpacing: "0.3px"
+              letterSpacing: "0.3px",
             }}
           >
             Process Payment
           </button>
           {currentStep === "tx-built" && paymentReference && (
-            <div style={{ 
-              marginTop: "16px", 
-              padding: "16px", 
-              backgroundColor: "#ffffff",
-              border: "1px solid #e0e0e0",
-              fontSize: "12px",
-              lineHeight: "1.6"
-            }}>
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                backgroundColor: "#ffffff",
+                border: "1px solid #e0e0e0",
+                fontSize: "12px",
+                lineHeight: "1.6",
+              }}
+            >
               <div style={{ fontFamily: "monospace", color: "#333" }}>
-                Amount: {paymentRequirements.accepts[0].maxAmountRequired / 1_000_000} USDC
+                Amount:{" "}
+                {paymentRequirements.accepts[0].maxAmountRequired / 1_000_000}{" "}
+                USDC
                 <br />
                 Reference: {paymentReference}
                 <br />
@@ -633,81 +762,132 @@ const Wallet = () => {
               </div>
             </div>
           )}
+          {currentStep === "complete" && transactionHash && (
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "16px",
+                backgroundColor: "#e8f5e9",
+                border: "1px solid #4caf50",
+                fontSize: "12px",
+                lineHeight: "1.6",
+              }}
+            >
+              <div style={{ fontFamily: "monospace", color: "#333" }}>
+                <strong>✅ Payment Broadcasted</strong>
+                <br />
+                Transaction Hash: {transactionHash.slice(0, 16)}...
+                <br />
+                <a
+                  href={`https://solscan.io/tx/${transactionHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "#2196f3",
+                    textDecoration: "underline",
+                    fontWeight: "500",
+                  }}
+                >
+                  View on Solscan →
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      
-
       {/* Weather Result */}
       {weatherData && (
-        <div style={{ 
-          marginBottom: "24px", 
-          padding: "32px", 
-          border: "2px solid #3c9e24ff",
-          backgroundColor: "#f0f9ff",
-          textAlign: "center"
-        }}>
-          <h2 style={{ 
-            fontSize: "14px", 
-            fontWeight: "500", 
-            marginBottom: "16px",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-            color: "#3c9e24ff"
-          }}>
+        <div
+          style={{
+            marginBottom: "24px",
+            padding: "32px",
+            border: "2px solid #3c9e24ff",
+            backgroundColor: "#f0f9ff",
+            textAlign: "center",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "14px",
+              fontWeight: "500",
+              marginBottom: "16px",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+              color: "#3c9e24ff",
+            }}
+          >
             x402 Access Granted
           </h2>
-          <div style={{ fontSize: "48px", fontWeight: "200", margin: "16px 0" }}>
+          <div
+            style={{ fontSize: "48px", fontWeight: "200", margin: "16px 0" }}
+          >
             {weatherData.temperatureF}°F
           </div>
         </div>
       )}
 
       {/* Quick Actions */}
-      <div style={{ 
-        marginTop: "32px", 
-        padding: "24px", 
-        backgroundColor: "#fafafa",
-        border: "1px solid #e0e0e0"
-      }}>
-        <h3 style={{ 
-          fontSize: "14px", 
-          fontWeight: "500", 
-          marginBottom: "16px",
-          textTransform: "uppercase",
-          letterSpacing: "0.5px"
-        }}>
+      <div
+        style={{
+          marginTop: "32px",
+          padding: "24px",
+          backgroundColor: "#fafafa",
+          border: "1px solid #e0e0e0",
+        }}
+      >
+        <h3
+          style={{
+            fontSize: "14px",
+            fontWeight: "500",
+            marginBottom: "16px",
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+          }}
+        >
           Quick Actions
         </h3>
-        <button 
+        <button
           onClick={executeFullFlow}
-          disabled={!provider || (currentStep !== "idle" && currentStep !== "complete")}
+          disabled={
+            !provider || (currentStep !== "idle" && currentStep !== "complete")
+          }
           style={{
             padding: "12px 24px",
             fontSize: "13px",
             marginRight: "12px",
-            cursor: (provider && (currentStep === "idle" || currentStep === "complete")) ? "pointer" : "not-allowed",
-            backgroundColor: (provider && (currentStep === "idle" || currentStep === "complete")) ? "#000000" : "#f5f5f5",
-            color: (provider && (currentStep === "idle" || currentStep === "complete")) ? "#ffffff" : "#999",
+            cursor:
+              provider && (currentStep === "idle" || currentStep === "complete")
+                ? "pointer"
+                : "not-allowed",
+            backgroundColor:
+              provider && (currentStep === "idle" || currentStep === "complete")
+                ? "#000000"
+                : "#f5f5f5",
+            color:
+              provider && (currentStep === "idle" || currentStep === "complete")
+                ? "#ffffff"
+                : "#999",
             border: "1px solid #000000",
             fontWeight: "400",
-            letterSpacing: "0.3px"
+            letterSpacing: "0.3px",
           }}
         >
           Execute Full Flow
         </button>
-        <button 
+        <button
           onClick={resetDemo}
           disabled={currentStep === "idle" && !weatherData}
           style={{
             padding: "12px 24px",
             fontSize: "13px",
-            cursor: (currentStep !== "idle" || weatherData) ? "pointer" : "not-allowed",
+            cursor:
+              currentStep !== "idle" || weatherData ? "pointer" : "not-allowed",
             backgroundColor: "#ffffff",
-            color: (currentStep !== "idle" || weatherData) ? "#000000" : "#999",
+            color: currentStep !== "idle" || weatherData ? "#000000" : "#999",
             border: "1px solid #000000",
             fontWeight: "400",
-            letterSpacing: "0.3px"
+            letterSpacing: "0.3px",
           }}
         >
           Reset Demo
