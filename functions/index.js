@@ -45,7 +45,7 @@ const checkMembership = async (connection, feePayer) => {
   );
 
   // Check if balance exceeds requirement
-  return balance > memberSplReq;
+  return balance >= memberSplReq;
 };
 
 /**

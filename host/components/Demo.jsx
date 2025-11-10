@@ -541,11 +541,11 @@ const Wallet = () => {
                 {membershipStatus.message}
               </div>
               <div style={{ color: "#666", fontSize: "12px", fontFamily: "monospace" }}>
-                Token: {membershipStatus.tokenAddress?.slice(0, 12)}...
+                SPL Token: <a href={`https://solscan.io/token/${membershipStatus.tokenAddress}`} target="_blank" rel="noopener noreferrer">{membershipStatus.tokenAddress?.slice(0, 12)}...</a>
                 <br />
                 Balance: {membershipStatus.balance} tokens
                 <br />
-                Required: {'>'} {membershipStatus.required} tokens
+                Required: {'>='} {membershipStatus.required} tokens
                 <br />
                 {membershipStatus.isMember && (
                   <span style={{ color: "#000", fontWeight: "500" }}>
