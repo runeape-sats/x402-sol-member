@@ -1,20 +1,15 @@
 # x402-sol-member
 
-You can add SPL token balance check to a x402 facilitator. This is a minimal (no-viem) dependency x402 facilitator (using serverless Firebase Functions) for providing a member-only access based on SPL token balance or processing a x402 payment. This sample project comes with a minimum React client for pay-per-call API access with Solana-based USDC payments.
-
-## Why?
-1. You can host your x402 facilitator using serverless Firebase Functions (pay-for-use plan). Your facilitator does not even need to hold any pkeys.
-2. You can customize x402 payment requirements including SPL-based membership access in this example.
+This is a _minimal_ dependency (no-viem) x402 facilitator (using serverless Firebase Functions) for providing a member-only access based on SPL token balance or processing a x402 USDC payment. This sample project comes with a minimum React client for pay-per-call API access with Solana-based USDC payments.
 
 ## Features
 
-- **x402 Payment Integration**: Supports x402 protocol for micro-payments on Solana.
+- **Host your own x402 facilitator** using _serverless_ Firebase Functions (pay-for-use plan). Your facilitator does not even need to hold any pkeys.
 - **Membership Detection**: Checks SPL token balance for membership status and skip payment broadcasting (i.e., free API access for members).
-- **Firebase Backend**: Serverless Cloud Functions for payment verification and settlement. Pay-per-use serverless setup instead of dedicated server hosting.
-- **React Frontend**: Simple UI for connecting Phantom wallet and making payments.
+- **Step-by-step React client DEMO**: Simple UI for connecting Phantom wallet and making payments.
 - **Minimal Dependencies**: Lightweight implementation focused on core functionality. No viem, no typescripts.
 
-## Architecture
+## Folder Structure
 
 - **Backend (`functions/`)**: Firebase Cloud Functions handle x402 payment verification, transaction validation, and membership checks.
 - **Frontend (`host/`)**: React app built with Vite for user interaction with Phantom wallet.
@@ -71,7 +66,6 @@ You can add SPL token balance check to a x402 facilitator. This is a minimal (no
    Create `host/.env`:
    ```env
    VITE_RPC_ENDPOINT=https://api.mainnet-beta.solana.com
-   VITE_MERCHANT_TOKEN_ACCOUNT=YOUR_MERCHANT_USDC_TOKEN_ACCOUNT
    VITE_FIREBASE_FUNCTIONS_URL=https://your-project.firebaseapp.com
    ```
    
@@ -79,10 +73,6 @@ You can add SPL token balance check to a x402 facilitator. This is a minimal (no
    
    Open browser to `http://localhost:5173` (or Vite's default port).
 
-### Constants
-- **USDC Mint**: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` (mainnet)
-- **Price**: 10,000 ($0.01 USDC per call)
-- **Membership Token**: Configure your SPL token mint for membership checks.
 
 ### Testing Payment Flow
 
