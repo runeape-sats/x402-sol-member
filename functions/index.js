@@ -25,7 +25,7 @@ const memberSpl = functions.config().solana.memberspl || "ERKbvKU1Md4AXNyzWQbagR
 const memberSplReq = Number(functions.config().solana.membersplreq) || 10000; // default to 10,000 if not set
 
 // Merchant's token account from config to receive payments
-const merchantTokenAcc = functions.config().solana.merchanttokenacc || "F6YEGxgmAyW3s45GSrqLgp8NZb7xK75GZ4HsgXxYD96r";
+const merchantTokenAcc = functions.config().solana.merchanttokenacc || "5M8WsYmkYotHR576EbdWcoZhAr6Nm4vuexSDGYZUePQ3";
 
 /*───────────────────────────────────────────────────────────────────────────*/
 // 🔍  Core verification & settlement helpers
