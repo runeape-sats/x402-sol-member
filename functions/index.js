@@ -24,7 +24,7 @@ const memberSpl = functions.config().solana.memberspl || "ERKbvKU1Md4AXNyzWQbagR
 // Get the required balance from config
 const memberSplReq = Number(functions.config().solana.membersplreq) || 10000; // default to 10,000 if not set
 
-// Merchant's token account from config to receive payments
+// Merchant USDC "token account" to receive USDC payments
 const merchantTokenAcc = functions.config().solana.merchanttokenacc || "5M8WsYmkYotHR576EbdWcoZhAr6Nm4vuexSDGYZUePQ3";
 
 /*───────────────────────────────────────────────────────────────────────────*/
