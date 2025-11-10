@@ -5,7 +5,7 @@ This is a _minimal_ dependency (no-viem) x402 facilitator (using serverless Fire
 ## Features
 
 - **Host your own x402 facilitator** using _serverless_ Firebase Functions (pay-for-use plan). Your facilitator does not even need to hold any pkeys.
-- **Membership Detection**: Checks SPL token balance for membership status and skip payment broadcasting (i.e., free API access for members).
+- **Membership Detection**: Checks SPL token balance for membership status and skip payment broadcasting (i.e., free API access for SPL token holders). Using SPL memecoins for x402 payments may not be cost-efficient for new users.
 - **Step-by-step React client DEMO**: Simple UI for connecting Phantom wallet and making payments.
 - **Minimal Dependencies**: Lightweight implementation focused on core functionality. No viem, no typescripts.
 
