@@ -29,11 +29,24 @@ const Wallet = () => {
   const [weatherData, setWeatherData] = useState(null);
   const [statusMessage, setStatusMessage] = useState("Connect your wallet to start");
   const [errorMessage, setErrorMessage] = useState("");
+  const [usdcBalance, setUsdcBalance] = useState(0);
+  const [canProceedToPayment, setCanProceedToPayment] = useState(false);
 
   // Configuration from environment variables (Vite uses import.meta.env)
   const RPC =
     import.meta.env.VITE_RPC_ENDPOINT || "https://api.mainnet-beta.solana.com";
   const API_URL = import.meta.env.VITE_FIREBASE_FUNCTIONS_URL || "http://127.0.0.1:5001/weather";
+
+  /**
+   * Helper function to determine status message color based on content
+   */
+  const getStatusMessageColor = (message) => {
+    if (message.startsWith("✅")) return "#4caf50"; // Green for success
+    if (message.startsWith("❌")) return "#f44336"; // Red for errors
+    if (message.startsWith("⚠️")) return "#ffeb3b"; // Yellow for warnings
+    if (message.includes("Failed") || message.includes("failed")) return "#f44336"; // Red for failed states
+    return "#333333"; // Default dark gray for neutral/in-progress
+  };
 
   /**
    * Step 1: Connect to Phantom wallet
@@ -154,6 +167,21 @@ const Wallet = () => {
       );
       setCurrentStep("membership-checked");
       
+      // Check USDC balance
+      const usdcMint = paymentRequirements.accepts[0].asset;
+      const usdcTokenAccount = tokenAccounts.value.find(
+        (account) => account.account.data.parsed.info.mint === usdcMint
+      );
+      const usdcBal = usdcTokenAccount 
+        ? Number(usdcTokenAccount.account.data.parsed.info.tokenAmount.uiAmount)
+        : 0;
+      setUsdcBalance(usdcBal);
+      
+      // Check if sufficient for payment
+      const PRICE = Number(paymentRequirements.accepts[0].maxAmountRequired);
+      const sufficient = usdcBal * 1_000_000 >= PRICE;
+      setCanProceedToPayment(sufficient);
+      
     } catch (error) {
       setErrorMessage(`Failed to check membership: ${error.message}`);
       setStatusMessage("❌ Membership check failed");
@@ -175,9 +203,14 @@ const Wallet = () => {
     
     try {
       const paymentSpec = requirements.accepts[0];
-      const USDC_MINT = new PublicKey(paymentSpec.asset);
-      const MERCHANT_TOKEN_ACCOUNT = new PublicKey(paymentSpec.payTo);
       const PRICE = Number(paymentSpec.maxAmountRequired);
+      
+      // Check if USDC balance is sufficient
+      if (usdcBalance * 1_000_000 < PRICE) {
+        throw new Error(`Insufficient USDC balance: ${usdcBalance} USDC, required: ${PRICE / 1_000_000} USDC`);
+      }
+      
+      const USDC_MINT = new PublicKey(paymentSpec.asset);
 
       // Get the buyer's associated token account for USDC
       const buyerATA = await getAssociatedTokenAddress(
@@ -640,10 +673,10 @@ const Wallet = () => {
             textTransform: "uppercase",
             letterSpacing: "0.5px"
           }}>
-            Step 3 · Membership Check
+            Step 3 · Balance & Membership Check
           </h2>
           <p style={{ fontSize: "12px", color: "#666", marginBottom: "12px", lineHeight: "1.5" }}>
-            Check if wallet holds required SPL tokens for member benefits
+            Check if wallet holds required SPL tokens for payment or membership benefits
           </p>
           <button 
             onClick={checkMembership}
@@ -659,7 +692,7 @@ const Wallet = () => {
               letterSpacing: "0.3px"
             }}
           >
-            Check Membership Status
+            Check
           </button>
           {membershipStatus && (
             <div style={{ 
@@ -674,11 +707,19 @@ const Wallet = () => {
                 {membershipStatus.message}
               </div>
               <div style={{ color: "#666", fontSize: "12px", fontFamily: "monospace" }}>
+                USDC Balance: {usdcBalance} USDC
+                <br />
                 SPL Token: <a href={`https://solscan.io/token/${membershipStatus.tokenAddress}`} target="_blank" rel="noopener noreferrer">{membershipStatus.tokenAddress?.slice(0, 12)}...</a>
                 <br />
                 Balance: {membershipStatus.balance} tokens
                 <br />
                 Required: {'>='} {membershipStatus.required} tokens
+                <br />
+                {!canProceedToPayment && (
+                  <span style={{ color: "#d32f2f", fontWeight: "500" }}>
+                    ⚠️ Warning: USDC balance insufficient for verification. Step 4 disabled.
+                  </span>
+                )}
                 <br />
                 {membershipStatus.isMember && (
                   <span style={{ color: "#000", fontWeight: "500" }}>
@@ -719,13 +760,13 @@ const Wallet = () => {
                 console.error(e);
               }
             }}
-            disabled={currentStep !== "membership-checked"}
+            disabled={currentStep !== "membership-checked" || !canProceedToPayment}
             style={{
               padding: "12px 24px",
               fontSize: "13px",
-              cursor: currentStep === "membership-checked" ? "pointer" : "not-allowed",
-              backgroundColor: currentStep === "membership-checked" ? "#000000" : "#f5f5f5",
-              color: currentStep === "membership-checked" ? "#ffffff" : "#999",
+              cursor: (currentStep === "membership-checked" && canProceedToPayment) ? "pointer" : "not-allowed",
+              backgroundColor: (currentStep === "membership-checked" && canProceedToPayment) ? "#000000" : "#f5f5f5",
+              color: (currentStep === "membership-checked" && canProceedToPayment) ? "#ffffff" : "#999",
               border: "1px solid #000000",
               fontWeight: "400",
               letterSpacing: "0.3px"
@@ -762,29 +803,7 @@ const Wallet = () => {
         </div>
       )}
 
-      {/* Status Display */}
-      <div style={{ 
-        marginBottom: "24px", 
-        padding: "24px", 
-        border: "1px solid #000000",
-        backgroundColor: "#fafafa"
-      }}>
-        <h3 style={{ 
-          fontSize: "14px", 
-          fontWeight: "500", 
-          margin: "0 0 12px 0",
-          textTransform: "uppercase",
-          letterSpacing: "0.5px"
-        }}>
-          Status
-        </h3>
-        <p style={{ margin: "0", fontSize: "13px", lineHeight: "1.6" }}>{statusMessage}</p>
-        {errorMessage && (
-          <p style={{ margin: "8px 0 0 0", color: "#d32f2f", fontSize: "12px" }}>
-            {errorMessage}
-          </p>
-        )}
-      </div>
+      
 
       {/* Weather Result */}
       {weatherData && (
