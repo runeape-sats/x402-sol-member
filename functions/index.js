@@ -12,6 +12,22 @@ const {
 } = require("@solana/spl-token");
 
 /*───────────────────────────────────────────────────────────────────────────*/
+// ⚙️  Configuration
+/*───────────────────────────────────────────────────────────────────────────*/
+
+// Establish Solana connection
+const rpcUrl = functions.config().solana.rpcurl || "https://api.mainnet-beta.solana.com";
+
+// Retrieve the member SPL token mint address from Firebase config
+const memberSpl = functions.config().solana.memberspl || "ERKbvKU1Md4AXNyzWQbagRJWpGE7rwUxGep9ESaxpump";
+
+// Get the required balance from config
+const memberSplReq = Number(functions.config().solana.membersplreq) || 10000; // default to 10,000 if not set
+
+// Merchant's token account from config to receive payments
+const merchantTokenAcc = functions.config().solana.merchanttokenacc || "F6YEGxgmAyW3s45GSrqLgp8NZb7xK75GZ4HsgXxYD96r";
+
+/*───────────────────────────────────────────────────────────────────────────*/
 // 🔍  Core verification & settlement helpers
 /*───────────────────────────────────────────────────────────────────────────*/
 
@@ -22,11 +38,7 @@ const {
  * @returns {boolean} True if the balance exceeds the required amount.
  */
 const checkMembership = async (connection, feePayer) => {
-  // Retrieve the member SPL token mint address from Firebase config
-  const memberSpl = functions.config().solana.memberspl;
-
-  // Get the required balance from config
-  const memberSplReq = Number(functions.config().solana.membersplreq);
+  
 
   // Get all token accounts owned by the fee payer
   const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
@@ -149,8 +161,7 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
   const feePayer = tx.feePayer;
   console.log("feePayer", feePayer.toBase58());
 
-  // Establish Solana connection
-  const rpcUrl = functions.config().solana.rpcurl;
+  // Connect to Solana network
   const connection = new Connection(rpcUrl);
 
   // Check if fee payer is a member (for free access)
@@ -236,8 +247,7 @@ exports.weather = functions.https.onRequest((req, res) => {
       `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, // USDC mainnet mint
     );
 
-    // Merchant's token account from config
-    const merchantTokenAcc = functions.config().solana.merchanttokenacc;
+    // Merchant token account to receive payments
     const MERCHANT_TOKEN_ACCOUNT = new PublicKey(
       `${merchantTokenAcc}`, // example merchant token account
     );
@@ -264,8 +274,8 @@ exports.weather = functions.https.onRequest((req, res) => {
           maxTimeoutSeconds: 120,
           extra: {
             memberType: "free access",
-            memberSPLToken: functions.config().solana.memberspl,
-            memberRequirement: functions.config().solana.membersplreq,
+            memberSPLToken: memberSpl,
+            memberRequirement: memberSplReq,
           }
         },
       ],
