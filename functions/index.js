@@ -16,16 +16,21 @@ const {
 /*───────────────────────────────────────────────────────────────────────────*/
 
 // Establish Solana connection
-const rpcUrl = functions.config().solana.rpcurl || "https://api.mainnet-beta.solana.com";
+const rpcUrl =
+  functions.config().solana.rpcurl || "https://api.mainnet-beta.solana.com";
 
 // Retrieve the member SPL token mint address from Firebase config
-const memberSpl = functions.config().solana.memberspl || "ERKbvKU1Md4AXNyzWQbagRJWpGE7rwUxGep9ESaxpump";
+const memberSpl =
+  functions.config().solana.memberspl ||
+  "ERKbvKU1Md4AXNyzWQbagRJWpGE7rwUxGep9ESaxpump";
 
 // Get the required balance from config
 const memberSplReq = Number(functions.config().solana.membersplreq) || 10000; // default to 10,000 if not set
 
 // Merchant USDC "token account" to receive USDC payments
-const merchantTokenAcc = functions.config().solana.merchanttokenacc || "5M8WsYmkYotHR576EbdWcoZhAr6Nm4vuexSDGYZUePQ3";
+const merchantTokenAcc =
+  functions.config().solana.merchanttokenacc ||
+  "5M8WsYmkYotHR576EbdWcoZhAr6Nm4vuexSDGYZUePQ3";
 
 /*───────────────────────────────────────────────────────────────────────────*/
 // 🔍  Core verification & settlement helpers
@@ -38,8 +43,6 @@ const merchantTokenAcc = functions.config().solana.merchanttokenacc || "5M8WsYmk
  * @returns {boolean} True if the balance exceeds the required amount.
  */
 const checkMembership = async (connection, feePayer) => {
-  
-
   // Get all token accounts owned by the fee payer
   const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
     feePayer,
@@ -168,14 +171,14 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
   const isMember = await checkMembership(connection, feePayer);
   if (isMember) {
     console.log(`member balance greater than req, granting free access`);
-    return { 
-      success: true, 
+    return {
+      success: true,
       isMemberAccess: true,
       feePayer: feePayer.toBase58(),
       txHash: null,
       networkId: null,
       error: null,
-      message: "Member free access granted"
+      message: "Member free access granted",
     };
   } else {
     console.log(
@@ -187,11 +190,11 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
   try {
     verifyTransaction(tx, req);
   } catch (e) {
-    return { 
-      success: false, 
+    return {
+      success: false,
       txHash: null,
       networkId: null,
-      error: e.message 
+      error: e.message,
     };
   }
 
@@ -202,18 +205,18 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
       skipPreflight: true,
     });
     console.log("[DEBUG] Transaction broadcasted:", sig);
-    return { 
-      success: true, 
+    return {
+      success: true,
       txHash: sig,
       networkId: "solana-mainnet-beta",
-      error: null 
+      error: null,
     };
   } catch (e) {
-    return { 
-      success: false, 
+    return {
+      success: false,
       txHash: null,
       networkId: null,
-      error: e.message 
+      error: e.message,
     };
   }
 }
@@ -229,6 +232,7 @@ exports.weather = functions.https.onRequest((req, res) => {
     // Set CORS headers
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Headers", "Content-Type, x-payment");
+    res.set("Access-Control-Expose-Headers", "X-PAYMENT-RESPONSE");
     if (req.method === "OPTIONS") {
       res.status(204).send("");
       return;
@@ -263,20 +267,21 @@ exports.weather = functions.https.onRequest((req, res) => {
           maxAmountRequired: PRICE.toString(),
           payTo: MERCHANT_TOKEN_ACCOUNT.toBase58(),
           resource: "GET /weather",
-          description: "Weather API per call (0.01 USDC). Member free access available.",
+          description:
+            "Weather API per call (0.01 USDC). Member free access available.",
           mimeType: "application/json",
           outputSchema: {
             type: "object",
             properties: {
-              temperatureF: { type: "number" }
-            }
+              temperatureF: { type: "number" },
+            },
           },
           maxTimeoutSeconds: 120,
           extra: {
             memberType: "free access",
             memberSPLToken: memberSpl,
             memberRequirement: memberSplReq,
-          }
+          },
         },
       ],
     };
