@@ -810,7 +810,7 @@ const Wallet = () => {
         <div style={{ 
           marginBottom: "24px", 
           padding: "32px", 
-          border: "2px solid #000000",
+          border: "2px solid #3c9e24ff",
           backgroundColor: "#f0f9ff",
           textAlign: "center"
         }}>
@@ -819,7 +819,8 @@ const Wallet = () => {
             fontWeight: "500", 
             marginBottom: "16px",
             textTransform: "uppercase",
-            letterSpacing: "0.5px"
+            letterSpacing: "0.5px",
+            color: "#3c9e24ff"
           }}>
             x402 Access Granted
           </h2>
