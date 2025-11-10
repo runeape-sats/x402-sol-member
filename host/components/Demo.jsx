@@ -25,7 +25,6 @@ const Wallet = () => {
   const [currentStep, setCurrentStep] = useState("idle"); // idle, fetching-requirements, checking-membership, building-tx, signing, submitting, complete
   const [paymentRequirements, setPaymentRequirements] = useState(null);
   const [membershipStatus, setMembershipStatus] = useState(null);
-  const [signedTransaction, setSignedTransaction] = useState(null);
   const [paymentReference, setPaymentReference] = useState(null);
   const [transactionHash, setTransactionHash] = useState(null);
   const [weatherData, setWeatherData] = useState(null);
@@ -269,7 +268,6 @@ const Wallet = () => {
       setStatusMessage("✍️ Requesting signature from Phantom wallet...");
 
       const signed = await provider.signTransaction(tx);
-      setSignedTransaction(signed);
       setStatusMessage("✅ Transaction signed by wallet");
       setCurrentStep("tx-signed");
 
@@ -372,7 +370,6 @@ const Wallet = () => {
     setCurrentStep("idle");
     setPaymentRequirements(null);
     setMembershipStatus(null);
-    setSignedTransaction(null);
     setPaymentReference(null);
     setTransactionHash(null);
     setWeatherData(null);
@@ -416,6 +413,8 @@ const Wallet = () => {
       >
         Solana Weather API · Step-by-step payment flow demonstration
       </p>
+
+
 
       {/* Step 1: Wallet Connection */}
       <div
@@ -826,6 +825,37 @@ const Wallet = () => {
           </div>
         </div>
       )}
+
+            {/* Status / Error bar */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: "12px 16px",
+          backgroundColor: "#fffdf6",
+          border: "1px solid #f0e6d6",
+          borderLeft: "none",
+          borderRight: "none",
+          borderBottom: "none",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "12px",
+          zIndex: 1000,
+          boxShadow: "0 -2px 8px rgba(0, 0, 0, 0.1)",
+        }}
+      >
+        <div style={{ fontSize: "13px", color: "#333", fontFamily: "monospace" }}>
+          {statusMessage}
+        </div>
+        {errorMessage && (
+          <div style={{ fontSize: "13px", color: "#d32f2f", fontWeight: 600 }}>
+            {errorMessage}
+          </div>
+        )}
+      </div>
 
       {/* Quick Actions */}
       <div
