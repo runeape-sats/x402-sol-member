@@ -23,6 +23,7 @@ const {
   TOKEN_PROGRAM_ID,
   decodeTransferCheckedInstruction,
 } = require("@solana/spl-token");
+const bs58 = require('bs58');
 
 /*───────────────────────────────────────────────────────────────────────────*/
 // ⚙️  Configuration
@@ -41,6 +42,31 @@ const memberSplReq = 10000; // default to 10,000 if not set
 // Merchant USDC "token account" to receive USDC payments
 const merchantTokenAcc =
   "5M8WsYmkYotHR576EbdWcoZhAr6Nm4vuexSDGYZUePQ3";
+
+/*───────────────────────────────────────────────────────────────────────────*/
+// 🎫  Transaction Signature Replay Protection
+/*───────────────────────────────────────────────────────────────────────────*/
+
+/**
+ * Checks if a transaction signature already exists on the blockchain.
+ * @param {Connection} connection - Solana connection instance.
+ * @param {string} signature - The transaction signature (base58 encoded).
+ * @throws {Error} If signature already exists on-chain (replay attempt).
+ */
+const checkTransactionNotUsed = async (connection, signature) => {
+  if (!signature) {
+    throw new Error('Transaction signature is required');
+  }
+  
+  // Check if transaction already exists on blockchain
+  const txInfo = await connection.getTransaction(signature, {
+    maxSupportedTransactionVersion: 0,
+  });
+  
+  if (txInfo !== null) {
+    throw new Error('Transaction already confirmed on-chain (replay detected)');
+  }
+};
 
 /*───────────────────────────────────────────────────────────────────────────*/
 // 🔍  Core verification & settlement helpers
@@ -160,11 +186,9 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
   const req = innerReq;
 
   // Extract transaction and reference from payload
-  const { txBase64, reference } = decoded.payload ?? {};
+  const { txBase64 } = decoded.payload ?? {};
   if (!txBase64)
     return { success: false, error: "Missing txBase64 in payload" };
-  if (!reference)
-    return { success: false, error: "Missing reference in payload" };
 
   // Deserialize the transaction
   const txBuffer = Buffer.from(txBase64, "base64");
@@ -176,6 +200,25 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
 
   // Connect to Solana network
   const connection = new Connection(rpcUrl);
+
+  // Get transaction signature for replay protection
+  const txSignature = tx.signatures[0];
+  if (!txSignature || !txSignature.signature) {
+    return { success: false, error: "Missing transaction signature" };
+  }
+  
+  // Convert signature to base58 string
+  const signatureStr = bs58.encode(txSignature.signature);
+
+  // Check if transaction was already confirmed on-chain (replay protection)
+  try {
+    await checkTransactionNotUsed(connection, signatureStr);
+  } catch (e) {
+    return {
+      success: false,
+      error: `Replay protection failed: ${e.message}`,
+    };
+  }
 
   // Check if fee payer is a member (for free access)
   const isMember = await checkMembership(connection, feePayer);
