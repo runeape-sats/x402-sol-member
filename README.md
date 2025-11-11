@@ -1,3 +1,9 @@
+
+
+
+https://github.com/user-attachments/assets/c57a3549-eaaf-45f5-bf29-60f97b6fd2c6
+
+
 # x402-sol-member
 
 This is a _minimal_ dependency (no-viem) x402 facilitator (using serverless Firebase Functions) for providing a member-only access based on SPL token balance or processing a x402 USDC payment. This sample project comes with a minimum React client for pay-per-call API access with Solana-based USDC payments.
