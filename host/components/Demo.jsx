@@ -418,7 +418,7 @@ const Wallet = () => {
           marginBottom: "40px",
         }}
       >
-        Solana 0.01 USDC payment <i>or</i> memecoin holder access (min. 10k tokens) for /weather API · Step-by-step payment flow demonstration
+        Solana 0.01 USDC payment <i>or</i> memecoin holder free access (min. 10k tokens) for /weather API<br/><b>Step-by-step payment flow demonstration (<a href="https://github.com/runeape-sats/x402-sol-member" style={{color: "black"}} target="_blank" rel="noopener noreferrer">Github</a>)</b>
       </p>
 
 
