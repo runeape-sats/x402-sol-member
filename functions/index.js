@@ -1,6 +1,12 @@
 const cors = require("cors")({ origin: true });
 
 const functions = require("firebase-functions/v1");
+
+// Set runtime options for Node.js 20
+const runtimeOpts = {
+  timeoutSeconds: 60,
+  memory: "256MB",
+};
 const {
   Connection,
   PublicKey,
@@ -16,20 +22,17 @@ const {
 /*───────────────────────────────────────────────────────────────────────────*/
 
 // Establish Solana connection
-const rpcUrl =
-  functions.config().solana.rpcurl || "https://api.mainnet-beta.solana.com";
+const rpcUrl = "https://api.mainnet-beta.solana.com";
 
 // Retrieve the member SPL token mint address from Firebase config
 const memberSpl =
-  functions.config().solana.memberspl ||
   "ERKbvKU1Md4AXNyzWQbagRJWpGE7rwUxGep9ESaxpump";
 
 // Get the required balance from config
-const memberSplReq = Number(functions.config().solana.membersplreq) || 10000; // default to 10,000 if not set
+const memberSplReq = 10000; // default to 10,000 if not set
 
 // Merchant USDC "token account" to receive USDC payments
 const merchantTokenAcc =
-  functions.config().solana.merchanttokenacc ||
   "5M8WsYmkYotHR576EbdWcoZhAr6Nm4vuexSDGYZUePQ3";
 
 /*───────────────────────────────────────────────────────────────────────────*/
@@ -227,7 +230,9 @@ async function verifyAndSettle(headerValue, paymentRequirements) {
  * Handles x402 payment verification and returns weather data if payment is valid.
  * Supports membership discounts based on SPL token balance.
  */
-exports.weather = functions.https.onRequest((req, res) => {
+exports.weather = functions
+  .runWith(runtimeOpts)
+  .https.onRequest((req, res) => {
   cors(req, res, async () => {
     // Set CORS headers
     res.set("Access-Control-Allow-Origin", "*");
