@@ -1,6 +1,13 @@
+/*───────────────────────────────────────────────────────────────────────────*/
+/**
+ * Firebase Cloud Function to verify and settle x402 payments on Solana.
+ * Supports membership discounts based on SPL token holdings.
+ */
+/*───────────────────────────────────────────────────────────────────────────*/
+
 const cors = require("cors")({ origin: true });
 
-const functions = require("firebase-functions/v1");
+const functions = require("firebase-functions/v1"); // v1 is easier to work with
 
 // Set runtime options for Node.js 20
 const runtimeOpts = {
@@ -240,12 +247,6 @@ exports.weather = functions
     res.set("Access-Control-Expose-Headers", "X-PAYMENT-RESPONSE");
     if (req.method === "OPTIONS") {
       res.status(204).send("");
-      return;
-    }
-
-    // Validate request method and path
-    if (req.method !== "GET" || (req.path !== "/" && req.path !== "/weather")) {
-      res.status(404).json({ error: "Not found" });
       return;
     }
 
