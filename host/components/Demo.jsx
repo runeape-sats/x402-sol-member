@@ -1,3 +1,10 @@
+/*───────────────────────────────────────────────────────────────────────────*/
+/**
+ * React component demonstrating the full x402 payment flow.
+ * Shows clear state transitions for each step of the payment process.
+ */
+/*───────────────────────────────────────────────────────────────────────────*/
+
 import { useState } from "react";
 import {
   TransactionInstruction,
