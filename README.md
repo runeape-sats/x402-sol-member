@@ -7,10 +7,15 @@ https://github.com/user-attachments/assets/c57a3549-eaaf-45f5-bf29-60f97b6fd2c6
 # x402-sol-member
 Serverless x402 facilitator for Solana USDC payments with free SPL memecoin holder access
 
-This is a _minimal_ dependency (no-viem) x402 facilitator (using serverless Firebase Functions) for providing a member-only access based on SPL token balance or processing a x402 USDC payment. This sample project comes with a minimum React client for pay-per-call API access with Solana-based USDC payments.
+## Introduction 
 
-live demo: https://x402.quark20.com/ 0.01 USDC for /weather test API (non-member)
-memecoin holder free access if token balance >= 10k $qAI (SOL)
+This is a _minimal_ dependency (no-viem) x402 facilitator (using serverless Firebase Functions, low deployment cost) for providing a member-only access based on SPL token balance or processing a x402 USDC payment. This sample project comes with a minimum React client for pay-per-call API access with Solana-based USDC payments.
+
+This project shows that you can host your own facilitator to remove 3rd party dependency and provide memecoin utilities by allowing holders to free access the gated API calls.
+
+Live demo: https://x402.quark20.com/
+- 0.01 USDC for /weather test API (non-member)
+- Free accesss for memecoin holders (token balance >= 10k $qAI)
 
 ## Features
 
