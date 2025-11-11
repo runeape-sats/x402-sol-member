@@ -46,16 +46,6 @@ This is a _minimal_ dependency (no-viem) x402 facilitator (using serverless Fire
    cd functions
    npm i
    ```
-   Set these in Firebase Functions config:
-   ```bash
-   firebase functions:config:set solana.rpcurl="https://api.mainnet-beta.solana.com"
-   firebase functions:config:set solana.memberspl="YOUR_SPL_TOKEN_MINT_ADDRESS"
-   firebase functions:config:set solana.membersplreq="MINIMUM_BALANCE_FOR_MEMBERSHIP"
-   firebase functions:config:set solana.merchanttokenacc="MERCHANT_USDC_TOKEN_ACCOUNT"
-   ```
-   
-   Get current env variables - firebase functions:config:get
-   [required] after setting env vars, download current env variable so that local emulator can run - `firebase functions:config:get > .runtimeconfig.json`
 
    Run the local Firebase Fucntions simulator
    `firebase emulators:start --only functions`
@@ -72,7 +62,7 @@ This is a _minimal_ dependency (no-viem) x402 facilitator (using serverless Fire
    Create `host/.env`:
    ```env
    VITE_RPC_ENDPOINT=https://api.mainnet-beta.solana.com
-   VITE_FIREBASE_FUNCTIONS_URL=https://your-project.firebaseapp.com
+   VITE_FIREBASE_FUNCTIONS_URL=https://your-project.firebaseapp.com/weather
    ```
    
    Run `npm run dev`
