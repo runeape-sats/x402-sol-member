@@ -401,7 +401,7 @@ const Wallet = () => {
           letterSpacing: "-0.5px",
         }}
       >
-        x402 Payment Protocol
+        x402 Payment & Membership Demo
       </h1>
       <p
         style={{
@@ -411,7 +411,7 @@ const Wallet = () => {
           marginBottom: "40px",
         }}
       >
-        Solana Weather API · Step-by-step payment flow demonstration
+        Solana 0.01 USDC payment <i>or</i> memecoin holder access (min. 10k tokens) for /weather API · Step-by-step payment flow demonstration
       </p>
 
 
