@@ -13,10 +13,6 @@ This is a _minimal_ dependency (no-viem) x402 facilitator (using serverless Fire
 
 This project shows that you can host your own facilitator to remove 3rd party dependency and provide memecoin utilities by allowing holders to free access the gated API calls.
 
-Live demo: https://x402.quark20.com/
-- 0.01 USDC for /weather test API (non-member)
-- Free accesss for memecoin holders (token balance >= 10k $qAI)
-
 ## Features
 
 - **Host your own x402 facilitator** using _serverless_ Firebase Functions (pay-for-use plan). Your facilitator does not even need to hold any pkeys.
